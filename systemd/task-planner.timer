@@ -1,0 +1,11 @@
+[Unit]
+Description=Run task-planner every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=task-planner.service
+
+[Install]
+WantedBy=timers.target
+

@@ -1,0 +1,9 @@
+[Unit]
+Description=Create scheduled Todoist tasks
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/benni-projects/task-planner
+EnvironmentFile=%h/.config/task-planner/todoist.env
+ExecStart=/usr/bin/env pnpm run run
+
