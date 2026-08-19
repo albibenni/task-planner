@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 type tokenStore struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -15,7 +17,9 @@ type project struct {
 }
 
 type plan struct {
-	ID, Content, Period, ProjectID string
-	DueString                      *string
-	Priority                       *int16
+	ID, Content, ProjectID string
+	StartDate, EndDate     time.Time
+	Recurrence             string
+	Weekdays               []int16
+	Priority               *int16
 }

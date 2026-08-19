@@ -165,7 +165,7 @@ func (m deleteModel) View() string {
 		return builder.String()
 	}
 	for index, p := range pagePlans {
-		entry := fmt.Sprintf("%s  ·  %s", p.Content, p.Period)
+		entry := fmt.Sprintf("%s  ·  %s to %s", p.Content, p.StartDate.Format("02 Jan 2006"), p.EndDate.Format("02 Jan 2006"))
 		if index == m.cursor {
 			builder.WriteString(selectedStyle.Render("› " + entry))
 		} else {
@@ -224,12 +224,12 @@ func loadAllDeletePlans() tea.Cmd {
 	return func() tea.Msg {
 		allPlans := make([]plan, 0)
 		for offset := 0; ; offset += deletePageSize {
-			page, total, err := plansPage("", deletePageSize, offset)
+			page, err := plansPage("", deletePageSize, offset)
 			if err != nil {
 				return deletePlansLoadedMsg{err: err}
 			}
 			allPlans = append(allPlans, page...)
-			if len(page) == 0 || len(allPlans) >= total {
+			if len(page) < deletePageSize {
 				return deletePlansLoadedMsg{plans: allPlans}
 			}
 		}

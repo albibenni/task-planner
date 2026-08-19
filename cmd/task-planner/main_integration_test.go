@@ -4,11 +4,12 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-func TestSharedPostgresPlansAndClaims(t *testing.T) {
+func TestSharedPostgresSchedules(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL is not set")
@@ -18,58 +19,42 @@ func TestSharedPostgresPlansAndClaims(t *testing.T) {
 		t.Fatalf("database should be reachable: %v", err)
 	}
 	if err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		_, err := conn.Exec(ctx, "truncate task_planner_runs, task_planner_plans")
+		_, err := conn.Exec(ctx, "truncate task_planner_schedule_tasks, task_planner_schedules")
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	p := plan{ID: "plan-the-day", Content: "Plan the day", Period: "day", ProjectID: "project-123"}
-	if err := addPlan(p); err != nil {
-		t.Fatal(err)
-	}
-	secondPlan := plan{ID: "plan-weekly-review", Content: "Plan weekly review", Period: "week", ProjectID: "project-123"}
-	if err := addPlan(secondPlan); err != nil {
-		t.Fatal(err)
-	}
-	thirdPlan := plan{ID: "write-report", Content: "Write report", Period: "week", ProjectID: "project-123"}
-	if err := addPlan(thirdPlan); err != nil {
-		t.Fatal(err)
+	start := time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC)
+	p := plan{ID: "plan-the-day", Content: "Plan the day", ProjectID: "project-123", StartDate: start, EndDate: start.AddDate(0, 0, 2), Recurrence: "daily"}
+	secondPlan := plan{ID: "plan-weekly-review", Content: "Plan weekly review", ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
+	thirdPlan := plan{ID: "write-report", Content: "Write report", ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
+	for _, schedule := range []plan{p, secondPlan, thirdPlan} {
+		if err := addPlan(schedule); err != nil {
+			t.Fatal(err)
+		}
 	}
 	all, err := plans()
-	if err != nil {
+	if err != nil || len(all) != 3 {
+		t.Fatalf("unexpected schedules: %#v, %v", all, err)
+	}
+	firstPage, err := plansPage("plan", 1, 0)
+	if err != nil || len(firstPage) != 1 || firstPage[0].Content != p.Content {
+		t.Fatalf("unexpected first filtered page: %#v, %v", firstPage, err)
+	}
+	secondPage, err := plansPage("plan", 1, 1)
+	if err != nil || len(secondPage) != 1 || secondPage[0].Content != secondPlan.Content {
+		t.Fatalf("unexpected second filtered page: %#v, %v", secondPage, err)
+	}
+	if err := recordTodoistTask(p.ID, start, "todoist-1"); err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 3 {
-		t.Fatalf("unexpected plans: %#v", all)
+	ids, err := todoistTaskIDs(p.ID)
+	if err != nil || len(ids) != 1 || ids[0] != "todoist-1" {
+		t.Fatalf("unexpected Todoist task IDs: %#v, %v", ids, err)
 	}
-	firstPage, total, err := plansPage("plan", 1, 0)
-	if err != nil || total != 2 || len(firstPage) != 1 || firstPage[0].Content != p.Content {
-		t.Fatalf("unexpected first filtered page: plans=%#v total=%d err=%v", firstPage, total, err)
-	}
-	secondPage, total, err := plansPage("plan", 1, 1)
-	if err != nil || total != 2 || len(secondPage) != 1 || secondPage[0].Content != secondPlan.Content {
-		t.Fatalf("unexpected second filtered page: plans=%#v total=%d err=%v", secondPage, total, err)
-	}
-	if err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		first, err := claimPlan(ctx, conn, p.Content, "2026-08-19")
-		if err != nil || !first {
-			t.Fatalf("first claim: %v %t", err, first)
+	for _, schedule := range []plan{p, secondPlan, thirdPlan} {
+		if err := removePlan(schedule.ID); err != nil {
+			t.Fatal(err)
 		}
-		second, err := claimPlan(ctx, conn, p.Content, "2026-08-19")
-		if err != nil || second {
-			t.Fatalf("second claim: %v %t", err, second)
-		}
-		return markCreated(ctx, conn, p.Content, "2026-08-19")
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := removePlan(p.Content); err != nil {
-		t.Fatal(err)
-	}
-	if err := removePlan(secondPlan.Content); err != nil {
-		t.Fatal(err)
-	}
-	if err := removePlan(thirdPlan.Content); err != nil {
-		t.Fatal(err)
 	}
 }

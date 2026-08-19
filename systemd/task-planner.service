@@ -1,7 +1,0 @@
-[Unit]
-Description=Create scheduled Todoist tasks
-
-[Service]
-Type=oneshot
-WorkingDirectory=%h/benni-projects/task-planner
-ExecStart=%h/benni-projects/task-planner/task-planner run

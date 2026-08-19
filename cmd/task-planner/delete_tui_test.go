@@ -8,7 +8,7 @@ import (
 )
 
 func TestDeleteModelSearchesAndShowsPagedPlans(t *testing.T) {
-	model := deleteModel{plans: []plan{{Content: "Plan the day", Period: "day"}, {Content: "Write report", Period: "week"}}}
+	model := deleteModel{plans: []plan{{Content: "Plan the day"}, {Content: "Write report"}}}
 	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("plan")})
 	model = updated.(deleteModel)
 	if model.query != "plan" || model.loading || command != nil {

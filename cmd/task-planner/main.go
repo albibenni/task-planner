@@ -19,7 +19,6 @@ Usage:
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
   task-planner delete          Search and delete a plan in the guided TUI
-  task-planner run [--dry-run] Run shared plans
   task-planner completion bash|zsh
 `)
 }
@@ -51,13 +50,11 @@ func main() {
 		activePlans, err = plans()
 		if err == nil {
 			for _, activePlan := range activePlans {
-				fmt.Printf("%s — %s\n", activePlan.Content, activePlan.Period)
+				fmt.Printf("%s — %s to %s\n", activePlan.Content, activePlan.StartDate.Format("2006-01-02"), activePlan.EndDate.Format("2006-01-02"))
 			}
 		}
 	case len(args) == 1 && args[0] == "delete":
 		err = guidedDelete()
-	case len(args) >= 1 && args[0] == "run":
-		err = schedule(len(args) == 2 && args[1] == "--dry-run")
 	case len(args) == 2 && args[0] == "completion":
 		err = completion(args[1])
 	default:
