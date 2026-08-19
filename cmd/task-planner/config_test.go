@@ -28,6 +28,9 @@ func TestConfigModelEditsAtCursor(t *testing.T) {
 	model := updateConfigModel(t, configModel{}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ab")})
 	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyLeft})
 	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("X")})
+	if model.value != "aXb" || model.cursor != 2 {
+		t.Fatalf("inserting in the middle corrupted input: %#v", model)
+	}
 	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyDelete})
 
 	if model.value != "aX" || model.cursor != 2 {

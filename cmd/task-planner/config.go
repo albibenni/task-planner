@@ -81,22 +81,32 @@ func (m configModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.cursor = len(runes)
 	case "backspace":
 		if m.cursor > 0 {
-			m.value = string(append(runes[:m.cursor-1], runes[m.cursor:]...))
+			m.value = string(joinRunes(runes[:m.cursor-1], runes[m.cursor:]))
 			m.cursor--
 		}
 	case "delete":
 		if m.cursor < len(runes) {
-			m.value = string(append(runes[:m.cursor], runes[m.cursor+1:]...))
+			m.value = string(joinRunes(runes[:m.cursor], runes[m.cursor+1:]))
 		}
 	default:
 		if len(key.Runes) > 0 {
-			updated := append(runes[:m.cursor], key.Runes...)
-			updated = append(updated, runes[m.cursor:]...)
-			m.value = string(updated)
+			m.value = string(joinRunes(runes[:m.cursor], key.Runes, runes[m.cursor:]))
 			m.cursor += len(key.Runes)
 		}
 	}
 	return m, nil
+}
+
+func joinRunes(parts ...[]rune) []rune {
+	length := 0
+	for _, part := range parts {
+		length += len(part)
+	}
+	joined := make([]rune, 0, length)
+	for _, part := range parts {
+		joined = append(joined, part...)
+	}
+	return joined
 }
 
 func (m configModel) View() string {
@@ -106,18 +116,18 @@ func (m configModel) View() string {
 	runes := []rune(m.value)
 	input := string(runes[:m.cursor]) + "│" + string(runes[m.cursor:])
 	var builder strings.Builder
-	builder.WriteString("Configure Supabase\n\n")
-	builder.WriteString("Paste the Session Pooler URL (port 5432):\n\n")
-	builder.WriteString(input)
-	builder.WriteString("\n\n←/→ move · Home/End jump · Backspace/Delete edit · Enter save · Esc cancel\n")
+	builder.WriteString(titleStyle.Render("Configure Supabase") + "\n")
+	builder.WriteString(promptStyle.Render("Paste the Session Pooler URL (port 5432)") + "\n\n")
+	builder.WriteString(inputStyle.Render(input))
+	builder.WriteString("\n\n" + mutedStyle.Render("←/→ move · Home/End jump · Backspace/Delete edit · Enter save · Esc cancel") + "\n")
 	if m.validationError != "" {
-		builder.WriteString("\n! " + m.validationError + "\n")
+		builder.WriteString("\n" + warningStyle.Render("! "+m.validationError) + "\n")
 	}
 	return builder.String()
 }
 
 func promptDatabaseURL() (string, error) {
-	final, err := tea.NewProgram(configModel{}, tea.WithAltScreen()).Run()
+	final, err := tea.NewProgram(configModel{}, tea.WithAltScreen(), tea.WithoutBracketedPaste()).Run()
 	if err != nil {
 		return "", err
 	}

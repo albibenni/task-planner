@@ -45,15 +45,15 @@ func (m statusModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m statusModel) View() string {
 	var builder strings.Builder
-	builder.WriteString("task-planner setup\n\n")
+	builder.WriteString(titleStyle.Render("task-planner setup") + "\n")
 	builder.WriteString(databaseStatusLine(m.status))
 	builder.WriteString("\n")
 	builder.WriteString(statusLine("Todoist login", m.status.todoistConfigured))
 	builder.WriteString("\n\n")
 	if m.status.ready() {
-		builder.WriteString("Ready to add and schedule shared plans.\n")
+		builder.WriteString(successStyle.Render("Ready to add and schedule shared plans.") + "\n")
 	} else {
-		builder.WriteString("Complete the missing setup steps:\n")
+		builder.WriteString(promptStyle.Render("Complete the missing setup steps:") + "\n")
 		if !m.status.supabaseConfigured {
 			builder.WriteString("  task-planner config\n")
 		} else if !m.status.supabaseReachable {
@@ -63,25 +63,25 @@ func (m statusModel) View() string {
 			builder.WriteString("  task-planner auth login\n")
 		}
 	}
-	builder.WriteString("\nPress any key to close.\n")
+	builder.WriteString("\n" + mutedStyle.Render("Press any key to close.") + "\n")
 	return builder.String()
 }
 
 func databaseStatusLine(status setupStatus) string {
 	if !status.supabaseConfigured {
-		return "! Supabase database URL: missing"
+		return warningStyle.Render("! Supabase database URL: missing")
 	}
 	if !status.supabaseReachable {
-		return "! Supabase database: unreachable"
+		return warningStyle.Render("! Supabase database: unreachable")
 	}
-	return "✓ Supabase database: reachable"
+	return successStyle.Render("✓ Supabase database: reachable")
 }
 
 func statusLine(label string, configured bool) string {
 	if configured {
-		return fmt.Sprintf("✓ %s: configured", label)
+		return successStyle.Render(fmt.Sprintf("✓ %s: configured", label))
 	}
-	return fmt.Sprintf("! %s: missing", label)
+	return warningStyle.Render(fmt.Sprintf("! %s: missing", label))
 }
 
 func showStatus() error {

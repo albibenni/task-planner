@@ -95,25 +95,27 @@ func (m addModel) choices() []string {
 
 func (m addModel) View() string {
 	if m.done {
-		return "Plan ready.\n"
+		return successStyle.Render("✓ Plan ready.") + "\n"
 	}
 	if m.cancelled {
-		return "Cancelled.\n"
+		return mutedStyle.Render("Cancelled.") + "\n"
 	}
 	if m.step == 0 {
-		return "Add a shared Todoist plan\n\nTask text: " + m.content + "█\n\nEnter to continue · Esc to cancel\n"
+		return titleStyle.Render("Add a shared Todoist plan") + "\n" + promptStyle.Render("Task text") + "\n\n" + inputStyle.Render(m.content+"█") + "\n\n" + mutedStyle.Render("Enter to continue · Esc to cancel") + "\n"
 	}
 	labels := []string{"Period", "Due date", "Priority", "Destination project"}
 	var builder strings.Builder
-	builder.WriteString("Add a shared Todoist plan\n\n" + labels[m.step-1] + ":\n\n")
+	builder.WriteString(titleStyle.Render("Add a shared Todoist plan") + "\n")
+	builder.WriteString(promptStyle.Render(labels[m.step-1]) + "\n\n")
 	for i, choice := range m.choices() {
-		marker := "  "
 		if i == m.cursor {
-			marker = "› "
+			builder.WriteString(selectedStyle.Render("› " + choice))
+		} else {
+			builder.WriteString("  " + choice)
 		}
-		builder.WriteString(marker + choice + "\n")
+		builder.WriteString("\n")
 	}
-	builder.WriteString("\n↑/↓ select · Enter continue · Esc cancel\n")
+	builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter continue · Esc cancel") + "\n")
 	return builder.String()
 }
 
