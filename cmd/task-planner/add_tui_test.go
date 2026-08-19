@@ -48,6 +48,15 @@ func TestWeekdayPickerStartsWithMonday(t *testing.T) {
 	}
 }
 
+func TestTaskTextStageStopsBeforeScheduleDetails(t *testing.T) {
+	model := addModel{content: "Plan the day", stopAfterContent: true, weekdays: map[int16]bool{}}
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(addModel)
+	if model.step != 1 || command == nil {
+		t.Fatalf("task text stage should finish before date selection: %#v", model)
+	}
+}
+
 func updateAddModel(t *testing.T, model addModel, message tea.Msg) addModel {
 	t.Helper()
 	updated, _ := model.Update(message)

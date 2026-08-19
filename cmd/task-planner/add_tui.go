@@ -19,6 +19,7 @@ type addModel struct {
 	priority                      int16
 	projects                      []project
 	done, cancelled               bool
+	stopAfterContent              bool
 	errorMessage                  string
 }
 
@@ -123,6 +124,9 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.errorMessage = ""
 		m.step++
 		m.cursor = 0
+		if m.step == 1 && m.stopAfterContent {
+			return m, tea.Quit
+		}
 	default:
 		if len(key.Runes) > 0 {
 			*value += string(key.Runes)
@@ -189,15 +193,31 @@ func (m addModel) View() string {
 }
 
 func guidedAdd() error {
+	initial, err := runAddModel(addModel{weekdays: map[int16]bool{}, stopAfterContent: true})
+	if err != nil {
+		return err
+	}
+	if initial.cancelled {
+		return nil
+	}
+	candidates, err := similarPlans(initial.content)
+	if err != nil {
+		return err
+	}
+	if len(candidates) > 0 {
+		duplicate, err := confirmDuplicate(initial.content, candidates)
+		if err != nil || duplicate {
+			return err
+		}
+	}
 	projects, err := todoistProjects()
 	if err != nil {
 		return err
 	}
-	final, err := tea.NewProgram(addModel{projects: projects, weekdays: map[int16]bool{}}, tea.WithAltScreen()).Run()
+	model, err := runAddModel(addModel{step: 1, content: initial.content, projects: projects, weekdays: map[int16]bool{}})
 	if err != nil {
 		return err
 	}
-	model := final.(addModel)
 	if model.cancelled {
 		return nil
 	}
@@ -210,16 +230,6 @@ func guidedAdd() error {
 	sum := sha256.Sum256([]byte(model.content))
 	selectedProject := model.projects[model.cursor]
 	p := plan{ID: fmt.Sprintf("%s-%x", slug(model.content), sum[:4]), Content: model.content, ProjectID: selectedProject.ID, StartDate: model.startDate, EndDate: model.endDate, Recurrence: model.recurrence, Weekdays: weekdays, Priority: &model.priority}
-	candidates, err := similarPlans(p.Content)
-	if err != nil {
-		return err
-	}
-	if len(candidates) > 0 {
-		duplicate, err := confirmDuplicate(p.Content, candidates)
-		if err != nil || duplicate {
-			return err
-		}
-	}
 	if !confirmSchedule(p) {
 		return nil
 	}
@@ -231,6 +241,14 @@ func guidedAdd() error {
 	}
 	fmt.Printf("Created %d Todoist tasks for %q.\n", len(occurrences(p)), p.Content)
 	return nil
+}
+
+func runAddModel(model addModel) (addModel, error) {
+	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
+	if err != nil {
+		return addModel{}, err
+	}
+	return final.(addModel), nil
 }
 
 func slug(text string) string {
