@@ -17,7 +17,7 @@ func TestValidateDatabaseURL(t *testing.T) {
 		}
 	}
 
-	for _, value := range []string{"", "https://example.com", "postgres://"} {
+	for _, value := range []string{"", "https://example.com", "postgres://", "postgresql://postgres:password@db.project-ref.supabase.co:5432/postgres"} {
 		if err := validateDatabaseURL(value); err == nil {
 			t.Errorf("expected %q to be invalid", value)
 		}

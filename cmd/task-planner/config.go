@@ -117,7 +117,10 @@ func (m configModel) View() string {
 	input := string(runes[:m.cursor]) + "│" + string(runes[m.cursor:])
 	var builder strings.Builder
 	builder.WriteString(titleStyle.Render("Configure Supabase") + "\n")
-	builder.WriteString(promptStyle.Render("Paste the Session Pooler URL (port 5432)") + "\n\n")
+	builder.WriteString(promptStyle.Render("Paste the Session Pooler URL (port 5432)") + "\n")
+	builder.WriteString(mutedStyle.Render("Dashboard → Connect → Direct (Connection string)") + "\n")
+	builder.WriteString(mutedStyle.Render("Connection Method: Session pooler · Type: URI") + "\n")
+	builder.WriteString(mutedStyle.Render("Use aws-…pooler.supabase.com:5432, not db.<project-ref>.supabase.co") + "\n\n")
 	builder.WriteString(inputStyle.Render(input))
 	builder.WriteString("\n\n" + mutedStyle.Render("←/→ move · Home/End jump · Backspace/Delete edit · Enter save · Esc cancel") + "\n")
 	if m.validationError != "" {
@@ -142,6 +145,10 @@ func validateDatabaseURL(value string) error {
 	connectionURL, err := url.Parse(value)
 	if err != nil || connectionURL.Host == "" || (connectionURL.Scheme != "postgres" && connectionURL.Scheme != "postgresql") {
 		return errors.New("enter a valid postgres:// or postgresql:// connection URL")
+	}
+	hostname := connectionURL.Hostname()
+	if strings.HasPrefix(hostname, "db.") && strings.HasSuffix(hostname, ".supabase.co") {
+		return errors.New("use Supabase Dashboard → Connect → Session Pooler (aws-…pooler.supabase.com:5432), not the IPv6-only db.<project-ref>.supabase.co URL")
 	}
 	return nil
 }

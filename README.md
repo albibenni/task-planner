@@ -38,8 +38,9 @@ task-planner help
 
 ## First-time setup
 
-1. Create a Supabase project. In **Connect**, copy the **Session Pooler** URL (port
-   `5432`), beginning with `postgres://` or `postgresql://`. Do not use the direct
+1. Create a Supabase project. In **Connect**, open **Direct (Connection string)**, set
+   **Connection Method** to **Session pooler**, then set **Type** to **URI** and copy the
+   URL (port `5432`), beginning with `postgres://` or `postgresql://`. Do not use the direct
    `db.<project-ref>.supabase.co` URL unless your network supports IPv6 or you pay for
    Supabase's IPv4 add-on: the direct endpoint is IPv6 by default. Do not use
    `PUBLIC_SUPABASE_URL`, publishable/anon keys, or service-role keys; they are HTTP API
