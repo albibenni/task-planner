@@ -11,23 +11,56 @@ import (
 )
 
 type addModel struct {
-	step, cursor                  int
+	step, cursor, projectIndex    int
 	content, startInput, endInput string
 	startDate, endDate            time.Time
 	recurrence                    string
 	weekdays                      map[int16]bool
 	priority                      int16
 	projects                      []project
-	done, cancelled               bool
-	stopAfterContent              bool
+	duplicateCandidates           []plan
+	done, cancelled, loading      bool
 	errorMessage                  string
+}
+
+type similarPlansLoadedMsg struct {
+	candidates []plan
+	err        error
+}
+
+type projectsLoadedMsg struct {
+	projects []project
+	err      error
 }
 
 func (m addModel) Init() tea.Cmd { return nil }
 
 func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := message.(type) {
+	case similarPlansLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.errorMessage = msg.err.Error()
+			return m, nil
+		}
+		m.duplicateCandidates = msg.candidates
+		if len(msg.candidates) > 0 {
+			m.step, m.cursor = 7, 0
+			return m, nil
+		}
+		m.loading = true
+		return m, loadAddProjects()
+	case projectsLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.errorMessage = msg.err.Error()
+			return m, nil
+		}
+		m.projects, m.step, m.cursor = msg.projects, 1, 0
+		return m, nil
+	}
 	key, ok := message.(tea.KeyMsg)
-	if !ok {
+	if !ok || m.loading {
 		return m, nil
 	}
 	pressed := key.String()
@@ -37,6 +70,9 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.step <= 2 {
 		return m.updateTextStep(key)
+	}
+	if m.step == 7 || m.step == 8 {
+		return m.updateConfirmation(key)
 	}
 	choices := m.choices()
 	if pressed == "up" || pressed == "k" {
@@ -77,8 +113,8 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.step++
 			m.cursor = 0
 		case 6:
-			m.done = true
-			return m, tea.Quit
+			m.projectIndex = m.cursor
+			m.step, m.cursor = 8, 1
 		}
 	}
 	return m, nil
@@ -124,13 +160,41 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.errorMessage = ""
 		m.step++
 		m.cursor = 0
-		if m.step == 1 && m.stopAfterContent {
-			return m, tea.Quit
+		if m.step == 1 {
+			m.loading = true
+			return m, loadSimilarPlans(m.content)
 		}
 	default:
 		if len(key.Runes) > 0 {
 			*value += string(key.Runes)
 		}
+	}
+	return m, nil
+}
+
+func (m addModel) updateConfirmation(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "left", "right", "up", "down", "tab":
+		m.cursor = 1 - m.cursor
+	case "y":
+		m.cursor = 0
+	case "n":
+		m.cursor = 1
+	case "enter":
+		if m.step == 7 {
+			if m.cursor == 0 {
+				m.cancelled = true
+				return m, tea.Quit
+			}
+			m.loading = true
+			return m, loadAddProjects()
+		}
+		if m.cursor == 0 {
+			m.done = true
+		} else {
+			m.cancelled = true
+		}
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -159,6 +223,23 @@ func (m addModel) View() string {
 	}
 	var builder strings.Builder
 	builder.WriteString(titleStyle.Render("Add a shared Todoist schedule") + "\n")
+	if m.loading {
+		builder.WriteString("\n" + mutedStyle.Render("Checking existing schedules…") + "\n")
+		return builder.String()
+	}
+	if m.step == 7 {
+		var names []string
+		for _, candidate := range m.duplicateCandidates {
+			names = append(names, "• "+candidate.Content)
+		}
+		fmt.Fprintf(&builder, "%q is similar to:\n%s\n\nIs it a duplicate?\n\n", m.content, strings.Join(names, "\n"))
+		return m.confirmationChoices(&builder, "Yes, block this schedule", "No, create it")
+	}
+	if m.step == 8 {
+		p := m.toPlan()
+		fmt.Fprintf(&builder, "Create %d Todoist task(s) from %s to %s?\nRepeat: %s\n\n", len(occurrences(p)), p.StartDate.Format("02 Jan 2006"), p.EndDate.Format("02 Jan 2006"), recurrenceLabel(p))
+		return m.confirmationChoices(&builder, "Yes, create tasks", "No, cancel creation")
+	}
 	if m.step <= 2 {
 		labels := []string{"Task text", "Start date", "End date"}
 		values := []string{m.content, m.startInput, m.endInput}
@@ -192,47 +273,28 @@ func (m addModel) View() string {
 	return builder.String()
 }
 
-func guidedAdd() error {
-	initial, err := runAddModel(addModel{weekdays: map[int16]bool{}, stopAfterContent: true})
-	if err != nil {
-		return err
-	}
-	if initial.cancelled {
-		return nil
-	}
-	candidates, err := similarPlans(initial.content)
-	if err != nil {
-		return err
-	}
-	if len(candidates) > 0 {
-		duplicate, err := confirmDuplicate(initial.content, candidates)
-		if err != nil || duplicate {
-			return err
+func (m addModel) confirmationChoices(builder *strings.Builder, yes, no string) string {
+	for index, choice := range []string{yes, no} {
+		if index == m.cursor {
+			builder.WriteString(selectedStyle.Render("› " + choice))
+		} else {
+			builder.WriteString("  " + choice)
 		}
+		builder.WriteString("\n")
 	}
-	projects, err := todoistProjects()
-	if err != nil {
-		return err
-	}
-	model, err := runAddModel(addModel{step: 1, content: initial.content, projects: projects, weekdays: map[int16]bool{}})
+	builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc cancel") + "\n")
+	return builder.String()
+}
+
+func guidedAdd() error {
+	model, err := runAddModel(addModel{weekdays: map[int16]bool{}})
 	if err != nil {
 		return err
 	}
 	if model.cancelled {
 		return nil
 	}
-	weekdays := make([]int16, 0, len(model.weekdays))
-	for day := int16(0); day < 7; day++ {
-		if model.weekdays[day] {
-			weekdays = append(weekdays, day)
-		}
-	}
-	sum := sha256.Sum256([]byte(model.content))
-	selectedProject := model.projects[model.cursor]
-	p := plan{ID: fmt.Sprintf("%s-%x", slug(model.content), sum[:4]), Content: model.content, ProjectID: selectedProject.ID, StartDate: model.startDate, EndDate: model.endDate, Recurrence: model.recurrence, Weekdays: weekdays, Priority: &model.priority}
-	if !confirmSchedule(p) {
-		return nil
-	}
+	p := model.toPlan()
 	if err := addPlan(p); err != nil {
 		return err
 	}
@@ -243,12 +305,54 @@ func guidedAdd() error {
 	return nil
 }
 
+func (m addModel) toPlan() plan {
+	weekdays := make([]int16, 0, len(m.weekdays))
+	for day := int16(0); day < 7; day++ {
+		if m.weekdays[day] {
+			weekdays = append(weekdays, day)
+		}
+	}
+	sum := sha256.Sum256([]byte(m.content))
+	selectedProject := m.projects[m.projectIndex]
+	return plan{ID: fmt.Sprintf("%s-%x", slug(m.content), sum[:4]), Content: m.content, ProjectID: selectedProject.ID, StartDate: m.startDate, EndDate: m.endDate, Recurrence: m.recurrence, Weekdays: weekdays, Priority: &m.priority}
+}
+
 func runAddModel(model addModel) (addModel, error) {
 	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
 	if err != nil {
 		return addModel{}, err
 	}
 	return final.(addModel), nil
+}
+
+func loadSimilarPlans(content string) tea.Cmd {
+	return func() tea.Msg {
+		candidates, err := similarPlans(content)
+		return similarPlansLoadedMsg{candidates: candidates, err: err}
+	}
+}
+
+func loadAddProjects() tea.Cmd {
+	return func() tea.Msg {
+		projects, err := todoistProjects()
+		return projectsLoadedMsg{projects: projects, err: err}
+	}
+}
+
+func recurrenceLabel(p plan) string {
+	switch p.Recurrence {
+	case "alternate":
+		return "every other day"
+	case "weekdays":
+		names := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+		var selected []string
+		for _, day := range p.Weekdays {
+			selected = append(selected, names[day])
+		}
+		return strings.Join(selected, ", ")
+	default:
+		return "every day"
+	}
 }
 
 func slug(text string) string {

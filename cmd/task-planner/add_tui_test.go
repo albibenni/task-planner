@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -14,15 +15,19 @@ func TestSlug(t *testing.T) {
 }
 
 func TestAddModelCollectsDateRangeAndRecurrence(t *testing.T) {
-	model := addModel{projects: []project{{ID: "coding", Name: "Coding"}}, weekdays: map[int16]bool{}}
+	model := addModel{weekdays: map[int16]bool{}}
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Plan")})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model = updateAddModel(t, model, similarPlansLoadedMsg{})
+	model = updateAddModel(t, model, projectsLoadedMsg{projects: []project{{ID: "coding", Name: "Coding"}}})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("20/8/26")})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("22/8/26")})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if !model.done || model.content != "Plan" || model.recurrence != "daily" || model.startDate.Format(time.DateOnly) != "2026-08-20" || model.endDate.Format(time.DateOnly) != "2026-08-22" || model.priority != 1 {
@@ -48,12 +53,23 @@ func TestWeekdayPickerStartsWithMonday(t *testing.T) {
 	}
 }
 
-func TestTaskTextStageStopsBeforeScheduleDetails(t *testing.T) {
-	model := addModel{content: "Plan the day", stopAfterContent: true, weekdays: map[int16]bool{}}
+func TestTaskTextChecksDuplicatesBeforeScheduleDetails(t *testing.T) {
+	model := addModel{content: "Plan the day", weekdays: map[int16]bool{}}
 	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = updated.(addModel)
-	if model.step != 1 || command == nil {
-		t.Fatalf("task text stage should finish before date selection: %#v", model)
+	if model.step != 1 || !model.loading || command == nil {
+		t.Fatalf("task text stage should start duplicate checking: %#v", model)
+	}
+}
+
+func TestAddConfirmationViewsRender(t *testing.T) {
+	duplicateView := (addModel{step: 7, content: "Plan my day", duplicateCandidates: []plan{{Content: "Plan the day"}}}).View()
+	if !strings.Contains(duplicateView, "Possible") && !strings.Contains(duplicateView, "similar") {
+		t.Fatalf("unexpected duplicate confirmation view: %s", duplicateView)
+	}
+	finalView := (addModel{step: 8, content: "Plan the day", projects: []project{{ID: "inbox"}}, startDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), endDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), recurrence: "daily"}).View()
+	if !strings.Contains(finalView, "Create 1 Todoist task") {
+		t.Fatalf("unexpected final confirmation view: %s", finalView)
 	}
 }
 
