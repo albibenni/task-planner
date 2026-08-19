@@ -30,6 +30,11 @@ func TestDeleteModelRequiresConfirmation(t *testing.T) {
 	if !model.confirming || model.selected == nil || model.cursor != 1 {
 		t.Fatalf("delete should default to no confirmation: %#v", model)
 	}
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	model = updated.(deleteModel)
+	if model.cursor != 0 {
+		t.Fatalf("up should select deletion confirmation: %#v", model)
+	}
 
 	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	model = updated.(deleteModel)

@@ -77,7 +77,7 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.confirming {
 		switch pressed {
-		case "left", "right", "tab":
+		case "left", "right", "up", "down", "tab":
 			m.cursor = 1 - m.cursor
 		case "y":
 			m.cursor = 0
@@ -192,7 +192,7 @@ func (m deleteModel) confirmView() string {
 		}
 		builder.WriteString("\n")
 	}
-	builder.WriteString("\n" + mutedStyle.Render("←/→ select · Enter confirm · Esc cancel") + "\n")
+	builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc cancel") + "\n")
 	return builder.String()
 }
 
