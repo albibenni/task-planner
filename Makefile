@@ -1,4 +1,8 @@
-.PHONY: build check fmt fmt-check lint test test-integration
+.PHONY: build check fmt fmt-check hooks lint test test-integration
+
+hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks installed for this clone."
 
 build:
 	go build -o task-planner ./cmd/task-planner

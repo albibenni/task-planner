@@ -121,6 +121,7 @@ launchctl kickstart -k gui/$(id -u)/com.benni.task-planner
 make fmt
 make check
 make test-integration
+make hooks
 ```
 
 `make check` runs `gofmt`, `go vet`, `golangci-lint`, and Go unit tests.
