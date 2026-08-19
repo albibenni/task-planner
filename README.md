@@ -15,10 +15,15 @@ Install Go 1.26 or newer, then clone and build the project:
 git clone https://github.com/albibenni/task-planner.git
 cd task-planner
 make build
+make hooks
 ```
 
 The build writes the local executable to `./task-planner`, which the included macOS and
-Linux scheduler files use. To make it available everywhere in your terminal:
+Linux scheduler files use. `make hooks` enables this repository's tracked Git hooks in
+the current clone: formatting and linting run before commits, while unit tests run before
+pushes. Run it once after cloning on each development machine.
+
+To make the CLI available everywhere in your terminal:
 
 ```bash
 go install ./cmd/task-planner
@@ -63,12 +68,16 @@ task-planner help
    task-planner run --dry-run
    ```
 
+   You can check the local prerequisites at any time with `task-planner status`. It shows
+   whether the Supabase URL and Todoist login are present, and gives the missing command.
+
 ## Commands
 
 ```text
 task-planner config
 task-planner auth login
 task-planner auth projects
+task-planner status
 task-planner add
 task-planner plans
 task-planner delete "Plan the day"
@@ -97,6 +106,9 @@ The shared Supabase claim prevents duplicates.
 
 ### Linux with systemd
 
+The sample service assumes the checkout is at `~/benni-projects/task-planner`. Change
+both paths in `systemd/task-planner.service` if yours is elsewhere, then install it:
+
 ```bash
 cp systemd/task-planner.{service,timer} ~/.config/systemd/user/
 systemctl --user daemon-reload
@@ -106,8 +118,9 @@ systemctl --user list-timers task-planner.timer
 
 ### macOS
 
-Update the absolute repository and binary paths in `launchd/run-task-planner.zsh` and
-`launchd/com.benni.task-planner.plist`, then:
+Replace every `/Users/benni/...` path in `launchd/run-task-planner.zsh` and
+`launchd/com.benni.task-planner.plist`—including `WorkingDirectory`, the wrapper path,
+the binary path, and both log paths—then:
 
 ```bash
 cp launchd/com.benni.task-planner.plist ~/Library/LaunchAgents/
@@ -128,3 +141,4 @@ make hooks
 `make test-integration` starts a disposable PostgreSQL 16 Docker container from
 `docker-compose.integration.yml`, runs the Supabase-compatible integration tests, then
 removes the container and volume.
+`make hooks` configures this clone to use the tracked `.githooks` scripts.

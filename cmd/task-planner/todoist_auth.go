@@ -102,6 +102,18 @@ func accessToken() (string, error) {
 	return refreshed.AccessToken, nil
 }
 
+func todoistConfigured() bool {
+	if strings.TrimSpace(os.Getenv("TODOIST_API_TOKEN")) != "" {
+		return true
+	}
+	raw, err := readSecret()
+	if err != nil {
+		return false
+	}
+	var token tokenStore
+	return json.Unmarshal([]byte(raw), &token) == nil && token.AccessToken != ""
+}
+
 func randomValue() string {
 	bytes := make([]byte, 32)
 	_, _ = rand.Read(bytes)

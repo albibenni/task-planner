@@ -20,9 +20,8 @@ func config() error {
 		return err
 	}
 	value = strings.TrimSpace(value)
-	connectionURL, err := url.Parse(value)
-	if err != nil || connectionURL.Host == "" || (connectionURL.Scheme != "postgres" && connectionURL.Scheme != "postgresql") {
-		return errors.New("enter a valid postgres:// or postgresql:// connection URL")
+	if err := validateDatabaseURL(value); err != nil {
+		return err
 	}
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".config", "task-planner")
@@ -39,5 +38,13 @@ func config() error {
 		return err
 	}
 	fmt.Println("Saved connection and initialized shared tables.")
+	return nil
+}
+
+func validateDatabaseURL(value string) error {
+	connectionURL, err := url.Parse(value)
+	if err != nil || connectionURL.Host == "" || (connectionURL.Scheme != "postgres" && connectionURL.Scheme != "postgresql") {
+		return errors.New("enter a valid postgres:// or postgresql:// connection URL")
+	}
 	return nil
 }

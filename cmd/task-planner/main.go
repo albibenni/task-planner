@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
 
-func usage() {
-	fmt.Print(`task-planner — shared Todoist plans
+func usage(writer io.Writer) {
+	fmt.Fprint(writer, `task-planner — shared Todoist plans
 
 Usage:
   task-planner config          Configure Supabase interactively
   task-planner auth login      Connect Todoist
   task-planner auth projects   List projects
+  task-planner status          Check this computer's setup
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
   task-planner delete <text>   Stop a plan by task text
@@ -28,7 +30,7 @@ func main() {
 	var err error
 	switch {
 	case len(args) == 0 || args[0] == "help" || args[0] == "--help":
-		usage()
+		usage(os.Stdout)
 	case len(args) == 1 && args[0] == "config":
 		err = config()
 	case len(args) == 2 && args[0] == "auth" && args[1] == "login":
@@ -41,6 +43,8 @@ func main() {
 		if err == nil {
 			err = json.NewEncoder(os.Stdout).Encode(projects)
 		}
+	case len(args) == 1 && args[0] == "status":
+		err = showStatus()
 	case len(args) == 1 && args[0] == "add":
 		err = guidedAdd()
 	case len(args) == 1 && args[0] == "plans":
@@ -58,7 +62,7 @@ func main() {
 	case len(args) == 2 && args[0] == "completion":
 		err = completion(args[1])
 	default:
-		usage()
+		usage(os.Stdout)
 		err = errors.New("unknown command")
 	}
 	if err != nil {
