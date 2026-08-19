@@ -7,12 +7,11 @@ The scheduler is deliberately safe to run repeatedly: each task includes a hidde
 ## Setup
 
 1. Install Node.js and pnpm, then run `pnpm install` in this folder.
-2. Create a Todoist API token in Todoist: **Settings → Integrations → Developer**.
-3. Add a Todoist project ID and edit the rule in `rules.json`. Project IDs can be retrieved with `GET https://api.todoist.com/api/v1/projects` using your token. The file starts empty, which is safe: it cannot create any task until you add a valid rule.
-4. Keep the token out of this repository. For a one-off local test:
+2. Run `pnpm auth login` from a graphical desktop session. It opens Todoist in your browser, uses OAuth 2.0 authorization code flow with PKCE, and stores the access and refresh tokens in macOS Keychain or Linux Secret Service.
+3. Add a Todoist project ID and edit the rule in `rules.json`. After connecting, retrieve your projects with `pnpm auth projects`. The file starts empty, which is safe: it cannot create any task until you add a valid rule.
+4. For a one-off local test:
 
    ```bash
-   export TODOIST_API_TOKEN='…'
    pnpm run dry-run
    pnpm run run
    ```
@@ -36,15 +35,11 @@ Rules are strictly validated with Zod before Todoist is contacted. Run `pnpm run
 
 ## Use one scheduler
 
-Install either the macOS **or** Arch Linux timer—not both. The markers make duplicates unlikely, but a single active scheduler is the intended operational model.
+Install either the macOS **or** Arch Linux timer—not both. The markers make duplicates unlikely, but a single active scheduler is the intended operational model. Run `pnpm auth login` manually before enabling a timer; background jobs cannot complete a browser login.
 
 ### Arch Linux
 
 ```bash
-mkdir -p ~/.config/task-planner
-chmod 700 ~/.config/task-planner
-printf 'TODOIST_API_TOKEN=…\n' > ~/.config/task-planner/todoist.env
-chmod 600 ~/.config/task-planner/todoist.env
 cp systemd/task-planner.{service,timer} ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now task-planner.timer
@@ -55,13 +50,12 @@ systemctl --user list-timers task-planner.timer
 
 ### macOS
 
-Add the token to your login Keychain, then copy and load the provided agent:
+First run `pnpm auth login` interactively. It stores the OAuth credentials in your login Keychain. Then copy and load the provided agent:
 
 ```bash
-security add-generic-password -a "$USER" -s task-planner.todoist -w '…' -U
 cp launchd/com.benni.task-planner.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.benni.task-planner.plist
 launchctl kickstart -k gui/$(id -u)/com.benni.task-planner
 ```
 
-The launch agent reads that token from Keychain through `launchd/run-task-planner.zsh`; no token is written to the plist. If pnpm is installed elsewhere, update the `exec` path in that wrapper.
+The launch agent obtains a valid access token from Keychain through `launchd/run-task-planner.zsh`; no credential is written to the plist. Expired access tokens are refreshed automatically, with Todoist's rotated refresh token safely replacing the old one. If pnpm is installed elsewhere, update the `exec` path in that wrapper.

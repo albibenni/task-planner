@@ -11,6 +11,7 @@
     "format:check": "biome format .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "auth": "tsx src/cli.ts auth",
     "run": "tsx src/index.ts run",
     "dry-run": "tsx src/index.ts run --dry-run",
     "prepare": "husky"

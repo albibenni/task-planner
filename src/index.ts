@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { getAccessToken } from "./oauth.js";
 
 type Period = "day" | "week" | "month";
 
@@ -25,7 +26,6 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const rulesPath = resolve(root, "rules.json");
 const apiBase = "https://api.todoist.com/api/v1";
 const dryRun = process.argv.includes("--dry-run");
-const token = process.env.TODOIST_API_TOKEN;
 
 export const periodKey = (period: Period, now = new Date()): string => {
   const year = now.getFullYear();
@@ -48,10 +48,7 @@ export const periodKey = (period: Period, now = new Date()): string => {
 const marker = (rule: Rule) => `[task-planner:${rule.id}:${periodKey(rule.period)}]`;
 
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  if (!token)
-    throw new Error(
-      "TODOIST_API_TOKEN is not set. Load it from your OS secret store before running.",
-    );
+  const token = await getAccessToken();
 
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
