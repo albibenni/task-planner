@@ -1,12 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { rulesPath } from "./config.js";
 import { main } from "./index.js";
 import { listProjects, login, logout } from "./oauth.js";
 
-const [command, subcommand] = process.argv.slice(2);
-
-const usage = `task-planner — create distinct Todoist tasks on a schedule
+export const usage = `task-planner — create distinct Todoist tasks on a schedule
 
 Usage:
   task-planner auth login       Connect Todoist in a graphical desktop session
@@ -68,12 +67,17 @@ const zshCompletion = `_task_planner() {
 }
 compdef _task_planner task-planner`;
 
-const init = async (): Promise<void> => {
-  const path = rulesPath();
+export const completionFor = (shell: string): string => {
+  if (shell === "bash") return bashCompletion;
+  if (shell === "zsh") return zshCompletion;
+  throw new Error("Completion is available for Bash and Zsh.");
+};
+
+export const initializeRules = async (path = rulesPath()): Promise<string> => {
   await mkdir(dirname(path), { recursive: true });
   try {
     await writeFile(path, "[]\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
-    console.log(`Created ${path}`);
+    return path;
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       throw new Error(`Rules file already exists: ${path}`);
@@ -82,7 +86,8 @@ const init = async (): Promise<void> => {
   }
 };
 
-const run = async (): Promise<void> => {
+export const run = async (args = process.argv.slice(2)): Promise<void> => {
+  const [command, subcommand] = args;
   if (!command || command === "help" || command === "--help" || command === "-h") {
     console.log(usage);
     return;
@@ -90,14 +95,18 @@ const run = async (): Promise<void> => {
   if (command === "auth" && subcommand === "login") return login();
   if (command === "auth" && subcommand === "logout") return logout();
   if (command === "auth" && subcommand === "projects") return listProjects();
-  if (command === "init") return init();
-  if (command === "completion" && subcommand === "bash") return console.log(bashCompletion);
-  if (command === "completion" && subcommand === "zsh") return console.log(zshCompletion);
+  if (command === "init") {
+    console.log(`Created ${await initializeRules()}`);
+    return;
+  }
+  if (command === "completion") return console.log(completionFor(subcommand ?? ""));
   if (command === "run") return main();
   throw new Error(`Unknown command.\n\n${usage}`);
 };
 
-void run().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  void run().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
