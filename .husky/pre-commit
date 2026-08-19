@@ -1,2 +1,1 @@
-pnpm run check
-
+make fmt-check lint

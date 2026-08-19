@@ -1,8 +1,7 @@
+/task-planner
 node_modules/
 dist/
 .env
-state.json
 .DS_Store
 coverage/
 *.log
-
