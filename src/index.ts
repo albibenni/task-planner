@@ -1,14 +1,12 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { processedPath, repositoryPath, rulesPath } from "./config.js";
+import { claimRun, connectDatabase, listPlans, markRunCreated, setupDatabase } from "./database.js";
 import { getAccessToken } from "./oauth.js";
-import { publishFile, updateFromRemote } from "./repository.js";
 
 type Period = "day" | "week" | "month";
 
-export const RuleSchema = z
+export const PlanSchema = z
   .object({
     id: z.string().regex(/^[a-z0-9-]+$/, "must use lowercase letters, numbers, and hyphens"),
     period: z.enum(["day", "week", "month"]),
@@ -19,17 +17,8 @@ export const RuleSchema = z
   })
   .strict();
 
-const RulesSchema = z.array(RuleSchema);
-export type Rule = z.infer<typeof RuleSchema>;
-
-const ProcessedStateSchema = z
-  .object({
-    version: z.literal(1),
-    processed: z.record(z.string(), z.array(z.string())),
-  })
-  .strict();
-type ProcessedState = z.infer<typeof ProcessedStateSchema>;
-
+const PlansSchema = z.array(PlanSchema);
+export type Plan = z.infer<typeof PlanSchema>;
 type TodoistTask = { content: string; description: string };
 
 const apiBase = "https://api.todoist.com/api/v1";
@@ -39,11 +28,8 @@ export const periodKey = (period: Period, now = new Date()): string => {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-
   if (period === "day") return `${year}-${month}-${day}`;
   if (period === "month") return `${year}-${month}`;
-
-  // ISO week, so the key is stable across the Monday-to-Sunday week.
   const date = new Date(Date.UTC(year, now.getMonth(), now.getDate()));
   const weekday = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - weekday);
@@ -53,15 +39,13 @@ export const periodKey = (period: Period, now = new Date()): string => {
   return `${weekYear}-W${String(week).padStart(2, "0")}`;
 };
 
-const marker = (rule: Rule) => `[task-planner:${rule.id}:${periodKey(rule.period)}]`;
+const marker = (plan: Plan) => `[task-planner:${plan.id}:${periodKey(plan.period)}]`;
 
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const token = await getAccessToken();
-
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${await getAccessToken()}`,
       "Content-Type": "application/json",
       ...init.headers,
     },
@@ -71,11 +55,11 @@ const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-const taskExists = async (rule: Rule): Promise<boolean> => {
-  const ruleMarker = marker(rule);
+const taskExists = async (plan: Plan): Promise<boolean> => {
+  const ruleMarker = marker(plan);
   let cursor: string | undefined;
   do {
-    const query = new URLSearchParams({ project_id: rule.projectId });
+    const query = new URLSearchParams({ project_id: plan.projectId });
     if (cursor) query.set("cursor", cursor);
     const result = await request<{ results: TodoistTask[]; next_cursor?: string }>(
       `/tasks?${query}`,
@@ -84,121 +68,60 @@ const taskExists = async (rule: Rule): Promise<boolean> => {
       result.results.some(
         (task) => task.content.includes(ruleMarker) || task.description.includes(ruleMarker),
       )
-    ) {
+    )
       return true;
-    }
     cursor = result.next_cursor;
   } while (cursor);
   return false;
 };
 
-const createTask = async (rule: Rule): Promise<void> => {
-  const description = `${marker(rule)}\nCreated automatically by task-planner.`;
-  if (dryRun) {
-    console.log(`[dry-run] Would create: ${rule.content} (${description})`);
-    return;
-  }
+const createTask = async (plan: Plan): Promise<void> => {
+  const description = `${marker(plan)}\nCreated automatically by task-planner.`;
+  if (dryRun) return console.log(`[dry-run] Would create: ${plan.content} (${description})`);
   await request("/tasks", {
     method: "POST",
     body: JSON.stringify({
-      content: rule.content,
+      content: plan.content,
       description,
-      project_id: rule.projectId,
-      due_string: rule.dueString,
-      priority: rule.priority,
+      project_id: plan.projectId,
+      due_string: plan.dueString,
+      priority: plan.priority,
     }),
   });
-  console.log(`Created: ${rule.content}`);
+  console.log(`Created: ${plan.content}`);
 };
 
-export const parseRules = (input: unknown): Rule[] => {
-  const rules = RulesSchema.parse(input);
+export const parsePlans = (input: unknown): Plan[] => {
+  const plans = PlansSchema.parse(input);
   const contents = new Set<string>();
-  for (const rule of rules) {
-    if (contents.has(rule.content)) throw new Error(`Task text must be unique: ${rule.content}`);
-    contents.add(rule.content);
+  for (const plan of plans) {
+    if (contents.has(plan.content)) throw new Error(`Task text must be unique: ${plan.content}`);
+    contents.add(plan.content);
   }
-  return rules;
-};
-
-export const readRules = async (path = rulesPath()): Promise<Rule[]> =>
-  parseRules(JSON.parse(await readFile(path, "utf8")));
-
-export const deletePlan = async (content: string, path = rulesPath()): Promise<Rule> => {
-  const rules = await readRules(path);
-  const removed = rules.find((rule) => rule.content === content);
-  if (!removed) throw new Error(`No active plan has task text: ${content}`);
-  await writeFile(
-    path,
-    `${JSON.stringify(
-      rules.filter((rule) => rule.content !== content),
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
-  return removed;
-};
-
-const readProcessedState = async (path = processedPath()): Promise<ProcessedState> => {
-  try {
-    return ProcessedStateSchema.parse(JSON.parse(await readFile(path, "utf8")));
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, processed: {} };
-    throw error;
-  }
-};
-
-const markProcessed = (state: ProcessedState, rule: Rule): void => {
-  const key = periodKey(rule.period);
-  const periods = state.processed[rule.content] ?? [];
-  if (!periods.includes(key)) periods.push(key);
-  state.processed[rule.content] = periods;
-};
-
-const isProcessed = (state: ProcessedState, rule: Rule): boolean =>
-  state.processed[rule.content]?.includes(periodKey(rule.period)) ?? false;
-
-const writeProcessedState = async (
-  state: ProcessedState,
-  path = processedPath(),
-): Promise<void> => {
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  await rename(temporaryPath, path);
+  return plans;
 };
 
 export const main = async (): Promise<void> => {
-  const repository = repositoryPath();
-  if (!dryRun) await updateFromRemote(repository);
-  const rules = await readRules();
-  const processed = await readProcessedState();
-  for (const rule of rules) {
-    if (isProcessed(processed, rule)) {
-      console.log(`Already processed for this ${rule.period}: ${rule.content}`);
-      continue;
+  const database = connectDatabase();
+  try {
+    await setupDatabase(database);
+    for (const plan of await listPlans(database)) {
+      const key = periodKey(plan.period);
+      if (dryRun) {
+        await createTask(plan);
+        continue;
+      }
+      if (!(await claimRun(database, plan.content, key))) {
+        console.log(`Already claimed for this ${plan.period}: ${plan.content}`);
+        continue;
+      }
+      if (await taskExists(plan))
+        console.log(`Recorded existing task for this ${plan.period}: ${plan.content}`);
+      else await createTask(plan);
+      await markRunCreated(database, plan.content, key);
     }
-    if (!dryRun && (await taskExists(rule))) {
-      markProcessed(processed, rule);
-      await writeProcessedState(processed);
-      await publishFile(
-        repository,
-        "processed.json",
-        `task-planner: record ${rule.content} for ${periodKey(rule.period)}`,
-      );
-      console.log(`Recorded existing task for this ${rule.period}: ${rule.content}`);
-      continue;
-    }
-    await createTask(rule);
-    if (!dryRun) {
-      markProcessed(processed, rule);
-      await writeProcessedState(processed);
-      await publishFile(
-        repository,
-        "processed.json",
-        `task-planner: record ${rule.content} for ${periodKey(rule.period)}`,
-      );
-    }
+  } finally {
+    await database.end({ timeout: 5 });
   }
 };
 

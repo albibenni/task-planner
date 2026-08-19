@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: task_planner_test
+      POSTGRES_PASSWORD: task_planner_test
+      POSTGRES_USER: task_planner_test
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U task_planner_test -d task_planner_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30

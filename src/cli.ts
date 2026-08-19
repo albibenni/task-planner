@@ -1,10 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { repositoryPath, rulesPath } from "./config.js";
-import { deletePlan, main, readRules } from "./index.js";
+import { addPlan, connectDatabase, listPlans, removePlan, setupDatabase } from "./database.js";
+import { saveDatabaseUrl } from "./environment.js";
+import { main, type Plan, PlanSchema } from "./index.js";
 import { listProjects, login, logout } from "./oauth.js";
-import { publishFile, updateFromRemote } from "./repository.js";
 
 export const usage = `task-planner — create distinct Todoist tasks on a schedule
 
@@ -12,17 +12,18 @@ Usage:
   task-planner auth login       Connect Todoist in a graphical desktop session
   task-planner auth projects    List Todoist projects
   task-planner auth logout      Remove the saved Todoist credentials
-  task-planner run [--dry-run]  Process configured rules
-  task-planner init             Create the default rules file, if absent
+  task-planner run [--dry-run]  Process shared plans
+  task-planner config           Save and validate the Supabase connection URL
+  task-planner db setup         Create/update the shared Supabase tables
+  task-planner add <options>    Add a shared plan; use help for options
   task-planner plans            List active plans
   task-planner delete <text>    Stop a plan by its unique task text
   task-planner completion <shell>
                                 Print Bash or Zsh completion code
   task-planner help             Show this help
 
-Plans and processed periods are stored in the Git checkout. Run the command from that
-checkout, or set TASK_PLANNER_REPOSITORY. Set TASK_PLANNER_RULES_PATH to override only
-the plans file.`;
+Set SUPABASE_DB_URL to the Supabase Session Pooler connection string. The shared
+database stores active plans and processed periods, so any device can run the scheduler.`;
 
 const bashCompletion = `# Bash completion for task-planner
 _task_planner() {
@@ -31,7 +32,7 @@ _task_planner() {
   command="\${COMP_WORDS[1]}"
 
   if (( COMP_CWORD == 1 )); then
-    COMPREPLY=( $(compgen -W 'auth run init plans delete completion help --help -h' -- "$cur") )
+    COMPREPLY=( $(compgen -W 'auth run config db add plans delete completion help --help -h' -- "$cur") )
     return
   fi
 
@@ -41,6 +42,9 @@ _task_planner() {
       ;;
     run)
       COMPREPLY=( $(compgen -W '--dry-run --help -h' -- "$cur") )
+      ;;
+    db)
+      COMPREPLY=( $(compgen -W 'setup' -- "$cur") )
       ;;
     completion)
       COMPREPLY=( $(compgen -W 'bash zsh' -- "$cur") )
@@ -53,8 +57,10 @@ const zshCompletion = `_task_planner() {
   if (( CURRENT == 2 )); then
     _describe -t commands 'task-planner command' \\
       'auth:Connect or manage Todoist credentials' \\
-      'run:Process configured rules' \\
-      'init:Create the default rules file' \\
+      'run:Process shared plans' \\
+      'config:Save the Supabase connection URL' \\
+      'db:Create/update shared database tables' \\
+      'add:Add a shared plan' \\
       'plans:List active plans' \\
       'delete:Stop a plan by its task text' \\
       'completion:Print shell completion code' \\
@@ -65,6 +71,7 @@ const zshCompletion = `_task_planner() {
   case "$words[2]" in
     auth) _values 'authentication command' login logout projects ;;
     run) _arguments '--dry-run[Show pending task creations without creating them]' ;;
+    db) _values 'database command' setup ;;
     completion) _values 'shell' bash zsh ;;
   esac
 }
@@ -76,17 +83,57 @@ export const completionFor = (shell: string): string => {
   throw new Error("Completion is available for Bash and Zsh.");
 };
 
-export const initializeRules = async (path = rulesPath()): Promise<string> => {
-  await mkdir(dirname(path), { recursive: true });
+const configure = async (): Promise<void> => {
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    await writeFile(path, "[]\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
-    return path;
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new Error(`Rules file already exists: ${path}`);
+    const url = await prompt.question("Paste the Supabase Session Pooler URL: ");
+    const path = await saveDatabaseUrl(url);
+    process.env.SUPABASE_DB_URL = url.trim();
+    const database = connectDatabase();
+    try {
+      await setupDatabase(database);
+    } finally {
+      await database.end({ timeout: 5 });
     }
-    throw error;
+    console.log(`Saved the Supabase connection and initialized shared tables in ${path}.`);
+  } finally {
+    prompt.close();
   }
+};
+
+const valueFor = (args: string[], option: string): string | undefined => {
+  const index = args.indexOf(option);
+  return index === -1 ? undefined : args[index + 1];
+};
+
+const idFor = (content: string): string => {
+  const slug = content
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 40);
+  return `${slug || "plan"}-${createHash("sha256").update(content).digest("hex").slice(0, 8)}`;
+};
+
+const addFromArgs = (args: string[]) => {
+  const content = valueFor(args, "--text");
+  const period = valueFor(args, "--period");
+  const projectId = valueFor(args, "--project-id");
+  const dueString = valueFor(args, "--due");
+  const priorityValue = valueFor(args, "--priority");
+  if (!content || !period || !projectId) {
+    throw new Error(
+      "Usage: task-planner add --text <text> --period <day|week|month> --project-id <id> [--due <date>] [--priority <1-4>]",
+    );
+  }
+  return PlanSchema.parse({
+    id: idFor(content),
+    content,
+    period,
+    projectId,
+    dueString,
+    priority: priorityValue ? Number(priorityValue) : undefined,
+  });
 };
 
 export const run = async (args = process.argv.slice(2)): Promise<void> => {
@@ -98,14 +145,38 @@ export const run = async (args = process.argv.slice(2)): Promise<void> => {
   if (command === "auth" && subcommand === "login") return login();
   if (command === "auth" && subcommand === "logout") return logout();
   if (command === "auth" && subcommand === "projects") return listProjects();
-  if (command === "init") {
-    console.log(`Created ${await initializeRules()}`);
+  if (command === "config") return configure();
+  if (command === "completion") return console.log(completionFor(subcommand ?? ""));
+  if (command === "db" && subcommand === "setup") {
+    const database = connectDatabase();
+    try {
+      await setupDatabase(database);
+    } finally {
+      await database.end({ timeout: 5 });
+    }
+    console.log("Shared Supabase tables are ready.");
     return;
   }
-  if (command === "completion") return console.log(completionFor(subcommand ?? ""));
+  if (command === "add") {
+    const database = connectDatabase();
+    try {
+      await setupDatabase(database);
+      await addPlan(database, addFromArgs(args.slice(1)));
+    } finally {
+      await database.end({ timeout: 5 });
+    }
+    console.log(`Added plan: ${valueFor(args, "--text")}`);
+    return;
+  }
   if (command === "plans") {
-    await updateFromRemote(repositoryPath());
-    const plans = await readRules();
+    const database = connectDatabase();
+    let plans: Plan[];
+    try {
+      await setupDatabase(database);
+      plans = await listPlans(database);
+    } finally {
+      await database.end({ timeout: 5 });
+    }
     if (plans.length === 0) {
       console.log("No active plans.");
       return;
@@ -116,10 +187,13 @@ export const run = async (args = process.argv.slice(2)): Promise<void> => {
   if (command === "delete") {
     const content = args.slice(1).join(" ").trim();
     if (!content) throw new Error("Provide the unique task text to delete.");
-    const repository = repositoryPath();
-    await updateFromRemote(repository);
-    await deletePlan(content);
-    await publishFile(repository, "rules.json", `task-planner: stop ${content}`);
+    const database = connectDatabase();
+    try {
+      await setupDatabase(database);
+      await removePlan(database, content);
+    } finally {
+      await database.end({ timeout: 5 });
+    }
     console.log(`Stopped plan: ${content}`);
     return;
   }
