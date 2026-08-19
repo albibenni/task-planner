@@ -11,7 +11,6 @@ const deletePageSize = 10
 
 type deletePlansLoadedMsg struct {
 	plans []plan
-	total int
 	err   error
 }
 
@@ -23,7 +22,7 @@ type deleteCompletedMsg struct {
 type deleteModel struct {
 	query, errorMessage string
 	plans               []plan
-	total, page, cursor int
+	page, cursor        int
 	loading, confirming bool
 	selected            *plan
 	done, cancelled     bool
@@ -31,7 +30,7 @@ type deleteModel struct {
 }
 
 func (m deleteModel) Init() tea.Cmd {
-	return loadDeletePlans("", 0)
+	return loadAllDeletePlans()
 }
 
 func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -43,12 +42,13 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.errorMessage = msg.err.Error()
 			return m, nil
 		}
-		m.plans, m.total = msg.plans, msg.total
-		if m.cursor >= len(m.plans) {
-			m.cursor = max(0, len(m.plans)-1)
+		m.plans = msg.plans
+		if m.cursor >= len(m.pagePlans()) {
+			m.cursor = max(0, len(m.pagePlans())-1)
 		}
 		return m, nil
 	case deleteCompletedMsg:
+		m.loading = false
 		if msg.err != nil {
 			m.errorMessage = msg.err.Error()
 			m.confirming = false
@@ -100,33 +100,29 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < len(m.plans)-1 {
+		if m.cursor < len(m.pagePlans())-1 {
 			m.cursor++
 		}
 	case "left", "h":
 		if m.page > 0 {
 			m.page--
 			m.cursor = 0
-			m.loading = true
-			return m, loadDeletePlans(m.query, m.page)
 		}
 	case "right", "l":
-		if (m.page+1)*deletePageSize < m.total {
+		if (m.page+1)*deletePageSize < len(m.filteredPlans()) {
 			m.page++
 			m.cursor = 0
-			m.loading = true
-			return m, loadDeletePlans(m.query, m.page)
 		}
 	case "backspace":
 		query := []rune(m.query)
 		if len(query) > 0 {
 			m.query = string(query[:len(query)-1])
-			m.page, m.cursor, m.loading = 0, 0, true
-			return m, loadDeletePlans(m.query, m.page)
+			m.page, m.cursor = 0, 0
 		}
 	case "enter":
-		if len(m.plans) > 0 {
-			selected := m.plans[m.cursor]
+		pagePlans := m.pagePlans()
+		if len(pagePlans) > 0 {
+			selected := pagePlans[m.cursor]
 			m.selected = &selected
 			m.confirming = true
 			m.cursor = 1
@@ -134,8 +130,7 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		if len(key.Runes) > 0 {
 			m.query += string(key.Runes)
-			m.page, m.cursor, m.loading = 0, 0, true
-			return m, loadDeletePlans(m.query, m.page)
+			m.page, m.cursor = 0, 0
 		}
 	}
 	return m, nil
@@ -163,12 +158,13 @@ func (m deleteModel) View() string {
 		builder.WriteString(warningStyle.Render("! "+m.errorMessage) + "\n")
 		return builder.String()
 	}
-	if len(m.plans) == 0 {
+	pagePlans := m.pagePlans()
+	if len(pagePlans) == 0 {
 		builder.WriteString(mutedStyle.Render("No active plans match this search.") + "\n\n")
 		builder.WriteString(mutedStyle.Render("Type to search · Esc to close") + "\n")
 		return builder.String()
 	}
-	for index, p := range m.plans {
+	for index, p := range pagePlans {
 		entry := fmt.Sprintf("%s  ·  %s", p.Content, p.Period)
 		if index == m.cursor {
 			builder.WriteString(selectedStyle.Render("› " + entry))
@@ -177,8 +173,9 @@ func (m deleteModel) View() string {
 		}
 		builder.WriteString("\n")
 	}
-	pages := (m.total + deletePageSize - 1) / deletePageSize
-	builder.WriteString("\n" + mutedStyle.Render(fmt.Sprintf("Page %d of %d · %d active plan(s) · ↑/↓ select · ←/→ page · Enter delete · Esc close", m.page+1, pages, m.total)) + "\n")
+	total := len(m.filteredPlans())
+	pages := (total + deletePageSize - 1) / deletePageSize
+	builder.WriteString("\n" + mutedStyle.Render(fmt.Sprintf("Page %d of %d · %d active plan(s) · ↑/↓ select · ←/→ page · Enter delete · Esc close", m.page+1, pages, total)) + "\n")
 	return builder.String()
 }
 
@@ -199,10 +196,43 @@ func (m deleteModel) confirmView() string {
 	return builder.String()
 }
 
-func loadDeletePlans(query string, page int) tea.Cmd {
+func (m deleteModel) filteredPlans() []plan {
+	if m.query == "" {
+		return m.plans
+	}
+	query := strings.ToLower(m.query)
+	filtered := make([]plan, 0)
+	for _, p := range m.plans {
+		if strings.Contains(strings.ToLower(p.Content), query) {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
+
+func (m deleteModel) pagePlans() []plan {
+	filtered := m.filteredPlans()
+	start := m.page * deletePageSize
+	if start >= len(filtered) {
+		return nil
+	}
+	end := min(start+deletePageSize, len(filtered))
+	return filtered[start:end]
+}
+
+func loadAllDeletePlans() tea.Cmd {
 	return func() tea.Msg {
-		plans, total, err := plansPage(query, deletePageSize, page*deletePageSize)
-		return deletePlansLoadedMsg{plans: plans, total: total, err: err}
+		allPlans := make([]plan, 0)
+		for offset := 0; ; offset += deletePageSize {
+			page, total, err := plansPage("", deletePageSize, offset)
+			if err != nil {
+				return deletePlansLoadedMsg{err: err}
+			}
+			allPlans = append(allPlans, page...)
+			if len(page) == 0 || len(allPlans) >= total {
+				return deletePlansLoadedMsg{plans: allPlans}
+			}
+		}
 	}
 }
 
