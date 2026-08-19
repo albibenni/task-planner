@@ -23,13 +23,14 @@ Linux scheduler files use. `make hooks` enables this repository's tracked Git ho
 the current clone: formatting and linting run before commits, while unit tests run before
 pushes. Run it once after cloning on each development machine.
 
-To make the CLI available everywhere in your terminal:
+To install the Go CLI globally for your current user:
 
 ```bash
-go install ./cmd/task-planner
+make install
 ```
 
-Ensure `$(go env GOPATH)/bin` is on your `PATH`, then confirm:
+This writes `task-planner` to `$(go env GOPATH)/bin`. Ensure that directory is on your
+`PATH`, then confirm:
 
 ```bash
 task-planner help
@@ -96,7 +97,19 @@ if command -v task-planner &>/dev/null; then
 fi
 ```
 
-Place it in `~/.bashrc` to load it for each terminal.
+Place it in `~/.bashrc` to load it for each terminal, then reload the current shell:
+
+```bash
+source ~/.bashrc
+```
+
+For Zsh, place this in `~/.zshrc` instead and run `source ~/.zshrc`:
+
+```zsh
+if command -v task-planner >/dev/null 2>&1; then
+  eval "$(task-planner completion zsh)"
+fi
+```
 
 ## Schedulers
 

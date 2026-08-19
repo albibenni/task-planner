@@ -1,4 +1,4 @@
-.PHONY: build check fmt fmt-check hooks lint test test-integration
+.PHONY: build check fmt fmt-check hooks install lint test test-integration
 
 hooks:
 	git config core.hooksPath .githooks
@@ -6,6 +6,10 @@ hooks:
 
 build:
 	go build -o task-planner ./cmd/task-planner
+
+install:
+	go install ./cmd/task-planner
+	@echo "Installed task-planner to $$(go env GOPATH)/bin. Ensure that directory is on PATH."
 
 fmt:
 	gofmt -w $$(find cmd -name '*.go' -type f)
