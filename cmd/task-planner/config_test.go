@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 func TestValidateDatabaseURL(t *testing.T) {
 	valid := []string{
@@ -18,4 +22,28 @@ func TestValidateDatabaseURL(t *testing.T) {
 			t.Errorf("expected %q to be invalid", value)
 		}
 	}
+}
+
+func TestConfigModelEditsAtCursor(t *testing.T) {
+	model := updateConfigModel(t, configModel{}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ab")})
+	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyLeft})
+	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("X")})
+	model = updateConfigModel(t, model, tea.KeyMsg{Type: tea.KeyDelete})
+
+	if model.value != "aX" || model.cursor != 2 {
+		t.Fatalf("unexpected editor state: %#v", model)
+	}
+}
+
+func TestConfigModelKeepsInvalidURLEditable(t *testing.T) {
+	model := updateConfigModel(t, configModel{value: "not-a-url", cursor: len("not-a-url")}, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.done || model.validationError == "" {
+		t.Fatalf("invalid URL should remain editable: %#v", model)
+	}
+}
+
+func updateConfigModel(t *testing.T, model configModel, message tea.Msg) configModel {
+	t.Helper()
+	updated, _ := model.Update(message)
+	return updated.(configModel)
 }

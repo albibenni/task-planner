@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,18 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jackc/pgx/v5"
 )
 
 func config() error {
-	fmt.Print("Paste the Supabase Session Pooler URL: ")
-	value, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	value, err := promptDatabaseURL()
 	if err != nil {
 		return err
 	}
-	value = strings.TrimSpace(value)
-	if err := validateDatabaseURL(value); err != nil {
-		return err
+	if value == "" {
+		return nil
 	}
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".config", "task-planner")
@@ -39,6 +37,95 @@ func config() error {
 	}
 	fmt.Println("Saved connection and initialized shared tables.")
 	return nil
+}
+
+type configModel struct {
+	value, validationError string
+	cursor                 int
+	done, cancelled        bool
+}
+
+func (m configModel) Init() tea.Cmd { return nil }
+
+func (m configModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := message.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	pressed := key.String()
+	if pressed == "ctrl+c" || pressed == "esc" {
+		m.cancelled = true
+		return m, tea.Quit
+	}
+	runes := []rune(m.value)
+	switch pressed {
+	case "enter":
+		m.value = strings.TrimSpace(m.value)
+		if err := validateDatabaseURL(m.value); err != nil {
+			m.validationError = err.Error()
+			return m, nil
+		}
+		m.done = true
+		return m, tea.Quit
+	case "left":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "right":
+		if m.cursor < len(runes) {
+			m.cursor++
+		}
+	case "home", "ctrl+a":
+		m.cursor = 0
+	case "end", "ctrl+e":
+		m.cursor = len(runes)
+	case "backspace":
+		if m.cursor > 0 {
+			m.value = string(append(runes[:m.cursor-1], runes[m.cursor:]...))
+			m.cursor--
+		}
+	case "delete":
+		if m.cursor < len(runes) {
+			m.value = string(append(runes[:m.cursor], runes[m.cursor+1:]...))
+		}
+	default:
+		if len(key.Runes) > 0 {
+			updated := append(runes[:m.cursor], key.Runes...)
+			updated = append(updated, runes[m.cursor:]...)
+			m.value = string(updated)
+			m.cursor += len(key.Runes)
+		}
+	}
+	return m, nil
+}
+
+func (m configModel) View() string {
+	if m.done || m.cancelled {
+		return ""
+	}
+	runes := []rune(m.value)
+	input := string(runes[:m.cursor]) + "│" + string(runes[m.cursor:])
+	var builder strings.Builder
+	builder.WriteString("Configure Supabase\n\n")
+	builder.WriteString("Paste the Session Pooler URL (port 5432):\n\n")
+	builder.WriteString(input)
+	builder.WriteString("\n\n←/→ move · Home/End jump · Backspace/Delete edit · Enter save · Esc cancel\n")
+	if m.validationError != "" {
+		builder.WriteString("\n! " + m.validationError + "\n")
+	}
+	return builder.String()
+}
+
+func promptDatabaseURL() (string, error) {
+	final, err := tea.NewProgram(configModel{}, tea.WithAltScreen()).Run()
+	if err != nil {
+		return "", err
+	}
+	model := final.(configModel)
+	if model.cancelled {
+		return "", nil
+	}
+	return model.value, nil
 }
 
 func validateDatabaseURL(value string) error {
