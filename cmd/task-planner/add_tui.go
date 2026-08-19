@@ -12,6 +12,7 @@ import (
 
 type addModel struct {
 	step, cursor, projectIndex    int
+	textCursor                    int
 	content, startInput, endInput string
 	startDate, endDate            time.Time
 	recurrence                    string
@@ -151,10 +152,28 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		value, label = &m.endInput, "end date"
 	}
 	switch pressed {
+	case "left":
+		if m.textCursor > 0 {
+			m.textCursor--
+		}
+	case "right":
+		if m.textCursor < len([]rune(*value)) {
+			m.textCursor++
+		}
+	case "home", "ctrl+a":
+		m.textCursor = 0
+	case "end", "ctrl+e":
+		m.textCursor = len([]rune(*value))
 	case "backspace":
 		runes := []rune(*value)
-		if len(runes) > 0 {
-			*value = string(runes[:len(runes)-1])
+		if m.textCursor > 0 {
+			*value = string(joinRunes(runes[:m.textCursor-1], runes[m.textCursor:]))
+			m.textCursor--
+		}
+	case "delete":
+		runes := []rune(*value)
+		if m.textCursor < len(runes) {
+			*value = string(joinRunes(runes[:m.textCursor], runes[m.textCursor+1:]))
 		}
 	case "enter":
 		if strings.TrimSpace(*value) == "" {
@@ -180,13 +199,16 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.errorMessage = ""
 		m.step++
 		m.cursor = 0
+		m.textCursor = 0
 		if m.step == 1 {
 			m.loading = true
 			return m, loadSimilarPlans(m.content)
 		}
 	default:
 		if len(key.Runes) > 0 {
-			*value += string(key.Runes)
+			runes := []rune(*value)
+			*value = string(joinRunes(runes[:m.textCursor], key.Runes, runes[m.textCursor:]))
+			m.textCursor += len(key.Runes)
 		}
 	}
 	return m, nil
@@ -280,11 +302,13 @@ func (m addModel) View() string {
 		labels := []string{"Task text", "Start date", "End date"}
 		values := []string{m.content, m.startInput, m.endInput}
 		builder.WriteString(promptStyle.Render(labels[m.step]) + "\n\n")
-		builder.WriteString(inputStyle.Render(values[m.step]+"█") + "\n\n")
+		runes := []rune(values[m.step])
+		input := string(runes[:m.textCursor]) + "█" + string(runes[m.textCursor:])
+		builder.WriteString(inputStyle.Render(input) + "\n\n")
 		if m.step > 0 {
 			builder.WriteString(mutedStyle.Render("Dates: today · tomorrow · 2026-08-20 · 20-08-2026 · 20/8/26") + "\n")
 		}
-		builder.WriteString(mutedStyle.Render("Enter continue · Backspace edit · Esc cancel") + "\n")
+		builder.WriteString(mutedStyle.Render("←/→ move · Home/End jump · Backspace/Delete edit · Enter continue · Esc cancel") + "\n")
 	} else {
 		labels := map[int]string{3: "Repeat", 4: "Choose weekdays (Space toggles)", 5: "Priority", 6: "Destination project"}
 		builder.WriteString(promptStyle.Render(labels[m.step]) + "\n\n")

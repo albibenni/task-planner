@@ -74,6 +74,16 @@ func TestTaskTextChecksDuplicatesBeforeScheduleDetails(t *testing.T) {
 	}
 }
 
+func TestAddTextFieldsSupportCursorEditing(t *testing.T) {
+	model := addModel{content: "10 abs", textCursor: len([]rune("10 abs")), weekdays: map[int16]bool{}}
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyLeft})
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyLeft})
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("X")})
+	if model.content != "10 aXbs" {
+		t.Fatalf("unexpected edited task text: %q", model.content)
+	}
+}
+
 func TestAddConfirmationViewsRender(t *testing.T) {
 	duplicateView := (addModel{step: 7, content: "Plan my day", duplicateCandidates: []plan{{Content: "Plan the day"}}}).View()
 	if !strings.Contains(duplicateView, "Possible") && !strings.Contains(duplicateView, "similar") {
