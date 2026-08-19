@@ -19,7 +19,10 @@ type addModel struct {
 	priority                      int16
 	projects                      []project
 	duplicateCandidates           []plan
-	done, cancelled, loading      bool
+	cancelled, loading            bool
+	creating, completed           bool
+	createdTasks                  int
+	creationError                 error
 	errorMessage                  string
 }
 
@@ -31,6 +34,11 @@ type similarPlansLoadedMsg struct {
 type projectsLoadedMsg struct {
 	projects []project
 	err      error
+}
+
+type scheduleCreatedMsg struct {
+	count int
+	err   error
 }
 
 func (m addModel) Init() tea.Cmd { return nil }
@@ -58,9 +66,21 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.projects, m.step, m.cursor = msg.projects, 1, 0
 		return m, nil
+	case scheduleCreatedMsg:
+		m.creating = false
+		m.createdTasks = msg.count
+		m.creationError = msg.err
+		m.completed = msg.err == nil
+		return m, nil
 	}
 	key, ok := message.(tea.KeyMsg)
 	if !ok || m.loading {
+		return m, nil
+	}
+	if m.completed || m.creationError != nil {
+		if ok {
+			return m, tea.Quit
+		}
 		return m, nil
 	}
 	pressed := key.String()
@@ -190,7 +210,8 @@ func (m addModel) updateConfirmation(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, loadAddProjects()
 		}
 		if m.cursor == 0 {
-			m.done = true
+			m.creating = true
+			return m, createAddSchedule(m.toPlan())
 		} else {
 			m.cancelled = true
 		}
@@ -223,6 +244,21 @@ func (m addModel) View() string {
 	}
 	var builder strings.Builder
 	builder.WriteString(titleStyle.Render("Add a shared Todoist schedule") + "\n")
+	if m.creating {
+		builder.WriteString("\n" + promptStyle.Render("Creating Todoist tasks…") + "\n\n")
+		builder.WriteString(mutedStyle.Render("Saving the shared schedule and creating every task in the selected range. Do not close this screen.") + "\n")
+		return builder.String()
+	}
+	if m.completed {
+		builder.WriteString("\n" + successStyle.Render(fmt.Sprintf("✓ Created %d Todoist task(s) for %q.", m.createdTasks, m.content)) + "\n\n")
+		builder.WriteString(mutedStyle.Render("Press any key to close.") + "\n")
+		return builder.String()
+	}
+	if m.creationError != nil {
+		builder.WriteString("\n" + warningStyle.Render("! Creation did not finish: "+m.creationError.Error()) + "\n\n")
+		builder.WriteString(mutedStyle.Render("The schedule may contain partially created tasks. Press any key to close.") + "\n")
+		return builder.String()
+	}
 	if m.loading {
 		builder.WriteString("\n" + mutedStyle.Render("Checking existing schedules…") + "\n")
 		return builder.String()
@@ -294,14 +330,6 @@ func guidedAdd() error {
 	if model.cancelled {
 		return nil
 	}
-	p := model.toPlan()
-	if err := addPlan(p); err != nil {
-		return err
-	}
-	if err := createScheduleTasks(p); err != nil {
-		return fmt.Errorf("schedule saved but task creation did not finish: %w", err)
-	}
-	fmt.Printf("Created %d Todoist tasks for %q.\n", len(occurrences(p)), p.Content)
 	return nil
 }
 
@@ -336,6 +364,18 @@ func loadAddProjects() tea.Cmd {
 	return func() tea.Msg {
 		projects, err := todoistProjects()
 		return projectsLoadedMsg{projects: projects, err: err}
+	}
+}
+
+func createAddSchedule(p plan) tea.Cmd {
+	return func() tea.Msg {
+		if err := addPlan(p); err != nil {
+			return scheduleCreatedMsg{err: err}
+		}
+		if err := createScheduleTasks(p); err != nil {
+			return scheduleCreatedMsg{err: fmt.Errorf("schedule saved but task creation did not finish: %w", err)}
+		}
+		return scheduleCreatedMsg{count: len(occurrences(p))}
 	}
 }
 

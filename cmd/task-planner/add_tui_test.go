@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +30,20 @@ func TestAddModelCollectsDateRangeAndRecurrence(t *testing.T) {
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if !model.creating {
+		t.Fatalf("final confirmation should start in-TUI creation: %#v", model)
+	}
+	model = updateAddModel(t, model, scheduleCreatedMsg{count: 3})
 
-	if !model.done || model.content != "Plan" || model.recurrence != "daily" || model.startDate.Format(time.DateOnly) != "2026-08-20" || model.endDate.Format(time.DateOnly) != "2026-08-22" || model.priority != 1 {
+	if !model.completed || model.content != "Plan" || model.recurrence != "daily" || model.startDate.Format(time.DateOnly) != "2026-08-20" || model.endDate.Format(time.DateOnly) != "2026-08-22" || model.priority != 1 {
 		t.Fatalf("unexpected final model: %#v", model)
+	}
+}
+
+func TestAddModelShowsCreationFailureInsideTUI(t *testing.T) {
+	model := addModel{creationError: errors.New("Todoist unavailable")}
+	if view := model.View(); !strings.Contains(view, "Creation did not finish") {
+		t.Fatalf("expected in-TUI creation error, got %s", view)
 	}
 }
 
