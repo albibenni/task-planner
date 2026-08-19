@@ -3,6 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "task-planner": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "check": "pnpm run typecheck && pnpm run lint && pnpm test",
     "typecheck": "tsc --noEmit",
@@ -11,9 +17,10 @@
     "format:check": "biome format .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build": "tsc -p tsconfig.build.json --outDir dist",
     "auth": "tsx src/cli.ts auth",
-    "run": "tsx src/index.ts run",
-    "dry-run": "tsx src/index.ts run --dry-run",
+    "run": "TASK_PLANNER_RULES_PATH=./rules.json tsx src/index.ts run",
+    "dry-run": "TASK_PLANNER_RULES_PATH=./rules.json tsx src/index.ts run --dry-run",
     "prepare": "husky"
   },
   "dependencies": {

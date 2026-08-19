@@ -16,6 +16,36 @@ The scheduler is deliberately safe to run repeatedly: each task includes a hidde
    pnpm run run
    ```
 
+## CLI help and completion
+
+The global CLI provides built-in help and shell completions:
+
+```bash
+task-planner help
+echo 'eval "$(task-planner completion bash)"' >> ~/.bashrc
+```
+
+For Zsh, place these lines in `~/.zshrc` after `compinit`:
+
+```zsh
+autoload -Uz compinit
+compinit
+eval "$(task-planner completion zsh)"
+```
+
+To install the current checkout globally, build it first, then run:
+
+```bash
+pnpm run build
+pnpm add --global "$(pwd)"
+task-planner init
+```
+
+`init` creates an empty rules file in `~/Library/Application Support/task-planner/` on
+macOS, or `$XDG_CONFIG_HOME/task-planner/` (normally `~/.config/task-planner/`) on
+Linux. Set `TASK_PLANNER_RULES_PATH` to use another location. The existing `pnpm run`
+scripts continue to use this checkout's `rules.json`.
+
 ## Rules
 
 Each rule has `period` (`day`, `week`, or `month`), `content`, `projectId`, optional Todoist `dueString`, and optional priority (`1`–`4`). The process may run at any time; it creates at most one task per rule and period. If a computer is off when a period begins, it creates the missing task at its next run.
