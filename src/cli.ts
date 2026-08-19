@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
-import { fileURLToPath } from "node:url";
 import { addPlan, connectDatabase, listPlans, removePlan, setupDatabase } from "./database.js";
 import { saveDatabaseUrl } from "./environment.js";
 import { main, type Plan, PlanSchema } from "./index.js";
@@ -201,7 +200,7 @@ export const run = async (args = process.argv.slice(2)): Promise<void> => {
   throw new Error(`Unknown command.\n\n${usage}`);
 };
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && /[/\\]cli\.(?:js|ts)$/.test(process.argv[1])) {
   void run().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
