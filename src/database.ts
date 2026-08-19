@@ -1,10 +1,11 @@
 import postgres from "postgres";
+import { savedDatabaseUrl } from "./environment.js";
 import type { Plan } from "./index.js";
 
 export type Database = ReturnType<typeof postgres>;
 
 const databaseUrl = (): string => {
-  const url = process.env.SUPABASE_DB_URL?.trim();
+  const url = process.env.SUPABASE_DB_URL?.trim() || savedDatabaseUrl();
   if (!url) throw new Error("SUPABASE_DB_URL is required. Run `task-planner db setup` first.");
   return url;
 };

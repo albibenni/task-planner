@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -5,6 +6,17 @@ import { dirname, join } from "node:path";
 export const environmentPath = (): string =>
   process.env.TASK_PLANNER_ENVIRONMENT_PATH?.trim() ||
   join(homedir(), ".config", "task-planner", "environment");
+
+export const savedDatabaseUrl = (): string | undefined => {
+  try {
+    const line = readFileSync(environmentPath(), "utf8")
+      .split(/\r?\n/)
+      .find((value) => value.startsWith("SUPABASE_DB_URL="));
+    return line?.slice("SUPABASE_DB_URL=".length).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const validateDatabaseUrl = (value: string): string => {
   const url = value.trim();

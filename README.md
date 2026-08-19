@@ -4,30 +4,72 @@ Creates distinct Todoist tasks once per configured period. It is for schedules T
 
 The scheduler is deliberately safe across devices. Supabase/Postgres atomically records a claim for each unique task text and period, so a Mac and Linux PC cannot both schedule the same period. Todoist markers remain a recovery safeguard.
 
+## Install
+
+Install a current Node.js release and pnpm, then clone, install, build, and expose the
+CLI globally:
+
+```bash
+pnpm setup
+# Restart your terminal, or run: exec "$SHELL" -l
+git clone https://github.com/albibenni/task-planner.git
+cd task-planner
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm add --global "$(pwd)"
+```
+
+Confirm the installation:
+
+```bash
+task-planner help
+```
+
+Keep the checkout: the included macOS and Linux scheduler files run the project from
+that directory. The global CLI is for interactive commands such as `config`, `add`, and
+`plans`.
+
 ## Setup
 
-1. Install Node.js and pnpm, then run `pnpm install` in this folder.
-2. Create a Supabase project. In its **Connect** panel, copy the **Session Pooler** Postgres URL. The Session Pooler works on IPv4-only home networks.
-3. Run the interactive setup command. It saves the URL in a protected local file and creates the shared database tables:
+1. Create a Supabase project. In the project dashboard, choose **Connect** (or
+   **Database → Connect**) and copy the **Session Pooler** connection string. It must
+   begin with `postgres://` or `postgresql://`; the Session Pooler works on IPv4-only
+   home networks. Do **not** use `PUBLIC_SUPABASE_URL`, a publishable/anon key, or a
+   service-role key: those are HTTP API credentials, not a Postgres connection URL. If
+   Supabase shows a password placeholder, replace it with your database password using
+   URL encoding when it contains special characters.
+2. Run the interactive setup command. It saves the URL in a protected local file and creates the shared database tables:
 
    ```bash
    task-planner config
    ```
 
-4. Run `pnpm auth login` from a graphical desktop session. It opens Todoist in your browser, uses OAuth 2.0 authorization code flow with PKCE, and stores the access and refresh tokens in macOS Keychain or Linux Secret Service.
-5. Retrieve projects, then add a plan once. Task text is the shared unique identifier:
+3. Run `task-planner auth login` from a graphical desktop session. It opens Todoist in your browser, uses OAuth 2.0 authorization code flow with PKCE, and stores the access and refresh tokens in macOS Keychain or Linux Secret Service.
+4. Retrieve projects, then add a plan once. Task text is the shared unique identifier:
 
    ```bash
-   pnpm auth projects
-   pnpm exec tsx src/cli.ts add --text "Plan the day" --period day --project-id YOUR_PROJECT_ID --due today
+   task-planner auth projects
+   task-planner add --text "Plan the day" --period day --project-id YOUR_PROJECT_ID --due today
    ```
 
-6. For a one-off local test:
+5. For a one-off local test:
 
    ```bash
    pnpm run dry-run
    pnpm run run
    ```
+
+After `task-planner config`, the next commands are:
+
+```bash
+task-planner auth login
+task-planner auth projects
+task-planner add --text "Plan the day" --period day --project-id YOUR_PROJECT_ID --due today
+task-planner plans
+task-planner run --dry-run
+```
+
+Enable the macOS or Linux scheduler only after the dry run looks correct.
 
 ## CLI help and completion
 
@@ -44,13 +86,6 @@ For Zsh, place these lines in `~/.zshrc` after `compinit`:
 autoload -Uz compinit
 compinit
 eval "$(task-planner completion zsh)"
-```
-
-To install the current checkout globally, build it first, then run:
-
-```bash
-pnpm run build
-pnpm add --global "$(pwd)"
 ```
 
 Run `task-planner config` once on every device. It stores the database URL in
