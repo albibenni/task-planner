@@ -25,7 +25,7 @@ func (m confirmModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c", "esc":
 		return m, tea.Quit
-	case "left", "right", "tab":
+	case "left", "right", "up", "down", "tab":
 		m.cursor = 1 - m.cursor
 	case "y":
 		m.cursor = 0
@@ -51,7 +51,7 @@ func (m confirmModel) View() string {
 		}
 		builder.WriteString("\n")
 	}
-	builder.WriteString("\n" + mutedStyle.Render("←/→ select · Enter confirm · Esc cancel") + "\n")
+	builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc cancel") + "\n")
 	return builder.String()
 }
 

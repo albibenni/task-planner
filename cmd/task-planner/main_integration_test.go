@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -52,7 +54,22 @@ func TestSharedPostgresSchedules(t *testing.T) {
 	if err != nil || len(ids) != 1 || ids[0] != "todoist-1" {
 		t.Fatalf("unexpected Todoist task IDs: %#v, %v", ids, err)
 	}
-	for _, schedule := range []plan{p, secondPlan, thirdPlan} {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodDelete || request.URL.Path != "/tasks/todoist-1" {
+			t.Fatalf("unexpected Todoist delete request: %s %s", request.Method, request.URL.Path)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	originalURL := todoistAPIBaseURL
+	todoistAPIBaseURL = server.URL
+	t.Cleanup(func() { todoistAPIBaseURL = originalURL })
+	t.Setenv("TODOIST_API_TOKEN", "test-token")
+	deleted, err := deletePlanAndTodoistTasks(p)
+	if err != nil || deleted != 1 {
+		t.Fatalf("unexpected deletion result: %d, %v", deleted, err)
+	}
+	for _, schedule := range []plan{secondPlan, thirdPlan} {
 		if err := removePlan(schedule.ID); err != nil {
 			t.Fatal(err)
 		}

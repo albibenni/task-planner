@@ -9,12 +9,14 @@ import (
 	"time"
 )
 
+var todoistAPIBaseURL = "https://api.todoist.com/api/v1"
+
 func todoistRequest(method, path string, body io.Reader, output any) error {
 	token, err := accessToken()
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(method, "https://api.todoist.com/api/v1"+path, body)
+	req, err := http.NewRequest(method, todoistAPIBaseURL+path, body)
 	if err != nil {
 		return err
 	}
