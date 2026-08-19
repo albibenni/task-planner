@@ -124,7 +124,16 @@ fi
 `task-planner add` creates the complete set of Todoist tasks immediately, so launchd,
 systemd, and a permanently running computer are not needed. Existing launchd agents or
 systemd timers from older versions should be disabled and removed; this version has no
-`task-planner run` command.
+`task-planner run` command:
+
+```bash
+# Linux
+systemctl --user disable --now task-planner.timer
+
+# macOS
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.benni.task-planner.plist
+rm ~/Library/LaunchAgents/com.benni.task-planner.plist
+```
 
 ## Development and tests
 
