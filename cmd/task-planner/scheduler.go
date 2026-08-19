@@ -45,6 +45,9 @@ func todoistRequest(method, path string, body io.Reader, output any) error {
 		raw, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("todoist API returned %s: %s", resp.Status, raw)
 	}
+	if output == nil {
+		return nil
+	}
 	return json.NewDecoder(resp.Body).Decode(output)
 }
 
@@ -61,6 +64,7 @@ func taskExists(p plan, key string) (bool, error) {
 		}
 		var result struct {
 			Results []struct {
+				ID          string `json:"id"`
 				Content     string `json:"content"`
 				Description string `json:"description"`
 			} `json:"results"`
@@ -80,6 +84,52 @@ func taskExists(p plan, key string) (bool, error) {
 		}
 		cursor = *result.NextCursor
 	}
+}
+
+func deleteTodoistTasksForPlan(p plan) (int, error) {
+	cursor := ""
+	deleted := 0
+	marker := "[task-planner:" + p.ID + ":"
+	for {
+		query := url.Values{"project_id": {p.ProjectID}}
+		if cursor != "" {
+			query.Set("cursor", cursor)
+		}
+		var result struct {
+			Results []struct {
+				ID          string `json:"id"`
+				Content     string `json:"content"`
+				Description string `json:"description"`
+			} `json:"results"`
+			NextCursor *string `json:"next_cursor"`
+		}
+		if err := todoistRequest("GET", "/tasks?"+query.Encode(), nil, &result); err != nil {
+			return deleted, err
+		}
+		for _, task := range result.Results {
+			if strings.Contains(task.Content, marker) || strings.Contains(task.Description, marker) {
+				if err := todoistRequest("DELETE", "/tasks/"+task.ID, nil, nil); err != nil {
+					return deleted, err
+				}
+				deleted++
+			}
+		}
+		if result.NextCursor == nil || *result.NextCursor == "" {
+			return deleted, nil
+		}
+		cursor = *result.NextCursor
+	}
+}
+
+func deletePlanAndTodoistTasks(p plan) (int, error) {
+	deletedTasks, err := deleteTodoistTasksForPlan(p)
+	if err != nil {
+		return deletedTasks, err
+	}
+	if err := removePlan(p.Content); err != nil {
+		return deletedTasks, err
+	}
+	return deletedTasks, nil
 }
 
 func createTask(p plan, key string, dry bool) error {

@@ -85,13 +85,15 @@ task-planner auth projects
 task-planner status
 task-planner add
 task-planner plans
-task-planner delete "Plan the day"
+task-planner delete
 task-planner run [--dry-run]
 task-planner completion bash|zsh
 ```
 
-Task text is the unique plan identifier. Deleting a plan removes it from Supabase, so it
-stops scheduling on every configured device.
+Task text is the unique plan identifier. `task-planner delete` opens a searchable,
+paginated picker of active plans. After confirmation, it removes the plan from Supabase
+and deletes active Todoist tasks created by that plan, so it stops scheduling on every
+configured device.
 
 Enable Bash completion with:
 

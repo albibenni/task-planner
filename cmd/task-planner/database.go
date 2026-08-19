@@ -93,6 +93,31 @@ func plans() ([]plan, error) {
 	return result, err
 }
 
+func plansPage(query string, limit, offset int) ([]plan, int, error) {
+	var result []plan
+	var total int
+	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
+		pattern := "%" + query + "%"
+		if err := conn.QueryRow(ctx, "select count(*) from task_planner_plans where content ilike $1", pattern).Scan(&total); err != nil {
+			return err
+		}
+		rows, err := conn.Query(ctx, "select id,content,period,project_id,due_string,priority from task_planner_plans where content ilike $1 order by content limit $2 offset $3", pattern, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p plan
+			if err := rows.Scan(&p.ID, &p.Content, &p.Period, &p.ProjectID, &p.DueString, &p.Priority); err != nil {
+				return err
+			}
+			result = append(result, p)
+		}
+		return rows.Err()
+	})
+	return result, total, err
+}
+
 func removePlan(text string) error {
 	return withDB(func(ctx context.Context, conn *pgx.Conn) error {
 		tag, err := conn.Exec(ctx, "delete from task_planner_plans where content=$1", text)

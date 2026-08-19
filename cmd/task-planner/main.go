@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 )
 
 func usage(writer io.Writer) {
@@ -19,7 +18,7 @@ Usage:
   task-planner status          Check this computer's setup
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
-  task-planner delete <text>   Stop a plan by task text
+  task-planner delete          Search and delete a plan in the guided TUI
   task-planner run [--dry-run] Run shared plans
   task-planner completion bash|zsh
 `)
@@ -55,8 +54,8 @@ func main() {
 				fmt.Printf("%s — %s\n", activePlan.Content, activePlan.Period)
 			}
 		}
-	case len(args) >= 2 && args[0] == "delete":
-		err = removePlan(strings.Join(args[1:], " "))
+	case len(args) == 1 && args[0] == "delete":
+		err = guidedDelete()
 	case len(args) >= 1 && args[0] == "run":
 		err = schedule(len(args) == 2 && args[1] == "--dry-run")
 	case len(args) == 2 && args[0] == "completion":
