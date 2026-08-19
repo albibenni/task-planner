@@ -6,9 +6,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+func databaseReachable(connectionURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, connectionURL)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	return conn.Ping(ctx)
+}
 
 func dbURL() (string, error) {
 	if value := strings.TrimSpace(os.Getenv("SUPABASE_DB_URL")); value != "" {

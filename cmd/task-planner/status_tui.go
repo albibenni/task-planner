@@ -9,19 +9,25 @@ import (
 
 type setupStatus struct {
 	supabaseConfigured bool
+	supabaseReachable  bool
+	supabaseError      error
 	todoistConfigured  bool
 }
 
 func localSetupStatus() setupStatus {
 	connectionURL, err := dbURL()
-	return setupStatus{
-		supabaseConfigured: err == nil && validateDatabaseURL(connectionURL) == nil,
-		todoistConfigured:  todoistConfigured(),
+	status := setupStatus{todoistConfigured: todoistConfigured()}
+	if err != nil || validateDatabaseURL(connectionURL) != nil {
+		return status
 	}
+	status.supabaseConfigured = true
+	status.supabaseError = databaseReachable(connectionURL)
+	status.supabaseReachable = status.supabaseError == nil
+	return status
 }
 
 func (status setupStatus) ready() bool {
-	return status.supabaseConfigured && status.todoistConfigured
+	return status.supabaseReachable && status.todoistConfigured
 }
 
 type statusModel struct {
@@ -40,7 +46,7 @@ func (m statusModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m statusModel) View() string {
 	var builder strings.Builder
 	builder.WriteString("task-planner setup\n\n")
-	builder.WriteString(statusLine("Supabase database URL", m.status.supabaseConfigured))
+	builder.WriteString(databaseStatusLine(m.status))
 	builder.WriteString("\n")
 	builder.WriteString(statusLine("Todoist login", m.status.todoistConfigured))
 	builder.WriteString("\n\n")
@@ -50,6 +56,8 @@ func (m statusModel) View() string {
 		builder.WriteString("Complete the missing setup steps:\n")
 		if !m.status.supabaseConfigured {
 			builder.WriteString("  task-planner config\n")
+		} else if !m.status.supabaseReachable {
+			builder.WriteString("  Supabase Dashboard → Connect → Session Pooler, then task-planner config\n")
 		}
 		if !m.status.todoistConfigured {
 			builder.WriteString("  task-planner auth login\n")
@@ -57,6 +65,16 @@ func (m statusModel) View() string {
 	}
 	builder.WriteString("\nPress any key to close.\n")
 	return builder.String()
+}
+
+func databaseStatusLine(status setupStatus) string {
+	if !status.supabaseConfigured {
+		return "! Supabase database URL: missing"
+	}
+	if !status.supabaseReachable {
+		return "! Supabase database: unreachable"
+	}
+	return "✓ Supabase database: reachable"
 }
 
 func statusLine(label string, configured bool) string {

@@ -38,9 +38,11 @@ task-planner help
 
 ## First-time setup
 
-1. Create a Supabase project. In **Connect** (or **Database → Connect**), copy the
-   **Session Pooler** URL, beginning with `postgres://` or `postgresql://`. Do not use
-   `PUBLIC_SUPABASE_URL`, publishable/anon keys, or service-role keys: they are HTTP API
+1. Create a Supabase project. In **Connect**, copy the **Session Pooler** URL (port
+   `5432`), beginning with `postgres://` or `postgresql://`. Do not use the direct
+   `db.<project-ref>.supabase.co` URL unless your network supports IPv6 or you pay for
+   Supabase's IPv4 add-on: the direct endpoint is IPv6 by default. Do not use
+   `PUBLIC_SUPABASE_URL`, publishable/anon keys, or service-role keys; they are HTTP API
    credentials, not a PostgreSQL connection URL.
 2. Run the interactive configuration command and paste that URL:
 
@@ -70,7 +72,8 @@ task-planner help
    ```
 
    You can check the local prerequisites at any time with `task-planner status`. It shows
-   whether the Supabase URL and Todoist login are present, and gives the missing command.
+   whether the Supabase database is reachable and the Todoist login is present, and gives
+   the missing command.
 
 ## Commands
 

@@ -15,8 +15,17 @@ func TestStatusModelShowsMissingSetupCommands(t *testing.T) {
 }
 
 func TestStatusModelShowsReadyState(t *testing.T) {
-	view := (statusModel{status: setupStatus{supabaseConfigured: true, todoistConfigured: true}}).View()
+	view := (statusModel{status: setupStatus{supabaseConfigured: true, supabaseReachable: true, todoistConfigured: true}}).View()
 	if !strings.Contains(view, "Ready to add and schedule shared plans.") {
 		t.Fatalf("unexpected ready view: %s", view)
+	}
+}
+
+func TestStatusModelExplainsUnreachableDatabase(t *testing.T) {
+	view := (statusModel{status: setupStatus{supabaseConfigured: true}}).View()
+	for _, expected := range []string{"Supabase database: unreachable", "Session Pooler", "task-planner config"} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("status view lacks %q", expected)
+		}
 	}
 }
