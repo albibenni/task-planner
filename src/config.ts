@@ -1,12 +1,11 @@
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
-const configDirectory = (): string => {
-  if (platform() === "darwin") return join(homedir(), "Library", "Application Support");
-  return process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config");
-};
+export const repositoryPath = (): string =>
+  resolve(process.env.TASK_PLANNER_REPOSITORY?.trim() || process.cwd());
 
-export const defaultRulesPath = (): string => join(configDirectory(), "task-planner", "rules.json");
+export const defaultRulesPath = (): string => join(repositoryPath(), "rules.json");
 
 export const rulesPath = (): string =>
   process.env.TASK_PLANNER_RULES_PATH?.trim() || defaultRulesPath();
+
+export const processedPath = (): string => join(repositoryPath(), "processed.json");

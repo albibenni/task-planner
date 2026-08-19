@@ -1,13 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { rulesPath } from "./config.js";
+import { processedPath, repositoryPath, rulesPath } from "./config.js";
 import { getAccessToken } from "./oauth.js";
+import { publishFile, updateFromRemote } from "./repository.js";
 
 type Period = "day" | "week" | "month";
 
-const RuleSchema = z
+export const RuleSchema = z
   .object({
     id: z.string().regex(/^[a-z0-9-]+$/, "must use lowercase letters, numbers, and hyphens"),
     period: z.enum(["day", "week", "month"]),
@@ -19,7 +20,15 @@ const RuleSchema = z
   .strict();
 
 const RulesSchema = z.array(RuleSchema);
-type Rule = z.infer<typeof RuleSchema>;
+export type Rule = z.infer<typeof RuleSchema>;
+
+const ProcessedStateSchema = z
+  .object({
+    version: z.literal(1),
+    processed: z.record(z.string(), z.array(z.string())),
+  })
+  .strict();
+type ProcessedState = z.infer<typeof ProcessedStateSchema>;
 
 type TodoistTask = { content: string; description: string };
 
@@ -102,16 +111,94 @@ const createTask = async (rule: Rule): Promise<void> => {
   console.log(`Created: ${rule.content}`);
 };
 
-export const parseRules = (input: unknown): Rule[] => RulesSchema.parse(input);
+export const parseRules = (input: unknown): Rule[] => {
+  const rules = RulesSchema.parse(input);
+  const contents = new Set<string>();
+  for (const rule of rules) {
+    if (contents.has(rule.content)) throw new Error(`Task text must be unique: ${rule.content}`);
+    contents.add(rule.content);
+  }
+  return rules;
+};
+
+export const readRules = async (path = rulesPath()): Promise<Rule[]> =>
+  parseRules(JSON.parse(await readFile(path, "utf8")));
+
+export const deletePlan = async (content: string, path = rulesPath()): Promise<Rule> => {
+  const rules = await readRules(path);
+  const removed = rules.find((rule) => rule.content === content);
+  if (!removed) throw new Error(`No active plan has task text: ${content}`);
+  await writeFile(
+    path,
+    `${JSON.stringify(
+      rules.filter((rule) => rule.content !== content),
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  return removed;
+};
+
+const readProcessedState = async (path = processedPath()): Promise<ProcessedState> => {
+  try {
+    return ProcessedStateSchema.parse(JSON.parse(await readFile(path, "utf8")));
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, processed: {} };
+    throw error;
+  }
+};
+
+const markProcessed = (state: ProcessedState, rule: Rule): void => {
+  const key = periodKey(rule.period);
+  const periods = state.processed[rule.content] ?? [];
+  if (!periods.includes(key)) periods.push(key);
+  state.processed[rule.content] = periods;
+};
+
+const isProcessed = (state: ProcessedState, rule: Rule): boolean =>
+  state.processed[rule.content]?.includes(periodKey(rule.period)) ?? false;
+
+const writeProcessedState = async (
+  state: ProcessedState,
+  path = processedPath(),
+): Promise<void> => {
+  const temporaryPath = `${path}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await rename(temporaryPath, path);
+};
 
 export const main = async (): Promise<void> => {
-  const rules = parseRules(JSON.parse(await readFile(rulesPath(), "utf8")));
+  const repository = repositoryPath();
+  if (!dryRun) await updateFromRemote(repository);
+  const rules = await readRules();
+  const processed = await readProcessedState();
   for (const rule of rules) {
+    if (isProcessed(processed, rule)) {
+      console.log(`Already processed for this ${rule.period}: ${rule.content}`);
+      continue;
+    }
     if (!dryRun && (await taskExists(rule))) {
-      console.log(`Already created for this ${rule.period}: ${rule.id}`);
+      markProcessed(processed, rule);
+      await writeProcessedState(processed);
+      await publishFile(
+        repository,
+        "processed.json",
+        `task-planner: record ${rule.content} for ${periodKey(rule.period)}`,
+      );
+      console.log(`Recorded existing task for this ${rule.period}: ${rule.content}`);
       continue;
     }
     await createTask(rule);
+    if (!dryRun) {
+      markProcessed(processed, rule);
+      await writeProcessedState(processed);
+      await publishFile(
+        repository,
+        "processed.json",
+        `task-planner: record ${rule.content} for ${periodKey(rule.period)}`,
+      );
+    }
   }
 };
 

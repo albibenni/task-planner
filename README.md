@@ -41,14 +41,27 @@ pnpm add --global "$(pwd)"
 task-planner init
 ```
 
-`init` creates an empty rules file in `~/Library/Application Support/task-planner/` on
-macOS, or `$XDG_CONFIG_HOME/task-planner/` (normally `~/.config/task-planner/`) on
-Linux. Set `TASK_PLANNER_RULES_PATH` to use another location. The existing `pnpm run`
-scripts continue to use this checkout's `rules.json`.
+Run the global command from the Git checkout that contains the plans, or set
+`TASK_PLANNER_REPOSITORY` to that checkout. `rules.json` and `processed.json` are
+version-controlled there so every device uses the same plans and sees processed periods.
+Set `TASK_PLANNER_RULES_PATH` only when you intentionally want another plans file.
+
+## Shared scheduling
+
+`rules.json` contains active plans and `processed.json` records every task text and
+period already handled. Both files belong in the same Git checkout on each device.
+Before a scheduled run, task-planner runs `git pull --ff-only`; after it creates or
+discovers a task for a period, it commits and pushes the processed record. This means a
+Mac sees a period already handled by Linux and does not schedule it again, even after
+the Todoist task has been completed.
+
+Git authentication and an upstream branch must be configured on every device. The
+`plans` command refreshes before listing, and `delete "Task text"` refreshes, removes
+the exact active plan, commits the change, and pushes it so scheduling stops everywhere.
 
 ## Rules
 
-Each rule has `period` (`day`, `week`, or `month`), `content`, `projectId`, optional Todoist `dueString`, and optional priority (`1`–`4`). The process may run at any time; it creates at most one task per rule and period. If a computer is off when a period begins, it creates the missing task at its next run.
+Each rule has `period` (`day`, `week`, or `month`), `content`, `projectId`, optional Todoist `dueString`, and optional priority (`1`–`4`). Task text is the unique plan identifier. The process may run at any time; it creates at most one task per rule and period. If a computer is off when a period begins, it creates the missing task at its next run.
 
 ```json
 {
