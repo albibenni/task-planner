@@ -79,6 +79,17 @@ func createTodoistTask(p plan, dueDate time.Time) (string, error) {
 }
 
 func createScheduleTasks(p plan) error {
+	tasks, err := createTodoistTasks(p)
+	if err != nil {
+		return err
+	}
+	if err := recordTodoistTasks(p.ID, tasks); err != nil {
+		return errors.Join(err, deleteCreatedTodoistTasks(tasks))
+	}
+	return nil
+}
+
+func createTodoistTasks(p plan) ([]todoistTaskRecord, error) {
 	dates := occurrences(p)
 	tasks := make([]todoistTaskRecord, len(dates))
 	jobs := make(chan int)
@@ -113,13 +124,10 @@ func createScheduleTasks(p plan) error {
 	workers.Wait()
 	select {
 	case err := <-errs:
-		return errors.Join(err, deleteCreatedTodoistTasks(tasks))
+		return nil, errors.Join(err, deleteCreatedTodoistTasks(tasks))
 	default:
 	}
-	if err := recordTodoistTasks(p.ID, tasks); err != nil {
-		return errors.Join(err, deleteCreatedTodoistTasks(tasks))
-	}
-	return nil
+	return tasks, nil
 }
 
 // deleteCreatedTodoistTasks compensates for a failed batch so that a retry
