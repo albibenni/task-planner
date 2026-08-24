@@ -397,7 +397,10 @@ func createAddSchedule(p plan) tea.Cmd {
 			return scheduleCreatedMsg{err: err}
 		}
 		if err := createScheduleTasks(p); err != nil {
-			return scheduleCreatedMsg{err: fmt.Errorf("schedule saved but task creation did not finish: %w", err)}
+			if rollbackErr := removePlan(p.ID); rollbackErr != nil {
+				return scheduleCreatedMsg{err: fmt.Errorf("task creation failed and the schedule could not be rolled back: %w", errors.Join(err, rollbackErr))}
+			}
+			return scheduleCreatedMsg{err: fmt.Errorf("task creation failed; the schedule was rolled back: %w", err)}
 		}
 		return scheduleCreatedMsg{count: len(occurrences(p))}
 	}

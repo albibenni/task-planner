@@ -44,7 +44,8 @@ func setupDB(ctx context.Context, conn *pgx.Conn) error {
 }
 
 func withDB(fn func(context.Context, *pgx.Conn) error) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	connectionURL, err := dbURL()
 	if err != nil {
 		return err
@@ -115,9 +116,42 @@ func removePlan(id string) error {
 }
 
 func recordTodoistTask(scheduleID string, dueDate time.Time, todoistTaskID string) error {
+	return recordTodoistTasks(scheduleID, []todoistTaskRecord{{dueDate: dueDate, todoistTaskID: todoistTaskID}})
+}
+
+type todoistTaskRecord struct {
+	dueDate       time.Time
+	todoistTaskID string
+}
+
+// recordTodoistTasks persists all task IDs as one transaction. This avoids a
+// connection and schema check for every generated task, and prevents partially
+// recorded batches when the database write fails.
+func recordTodoistTasks(scheduleID string, tasks []todoistTaskRecord) error {
+	if len(tasks) == 0 {
+		return nil
+	}
 	return withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		_, err := conn.Exec(ctx, "insert into task_planner_schedule_tasks(schedule_id,due_date,todoist_task_id) values($1,$2,$3)", scheduleID, dueDate, todoistTaskID)
-		return err
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		batch := &pgx.Batch{}
+		for _, task := range tasks {
+			batch.Queue("insert into task_planner_schedule_tasks(schedule_id,due_date,todoist_task_id) values($1,$2,$3)", scheduleID, task.dueDate, task.todoistTaskID)
+		}
+		results := tx.SendBatch(ctx, batch)
+		for range tasks {
+			if _, err := results.Exec(); err != nil {
+				_ = results.Close()
+				return err
+			}
+		}
+		if err := results.Close(); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	})
 }
 

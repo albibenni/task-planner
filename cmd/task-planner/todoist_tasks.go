@@ -1,35 +1,48 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 var todoistAPIBaseURL = "https://api.todoist.com/api/v1"
+
+const (
+	todoistRequestTimeout = 15 * time.Second
+	todoistCreateWorkers  = 4
+)
+
+var todoistHTTPClient = &http.Client{Timeout: todoistRequestTimeout}
 
 func todoistRequest(method, path string, body io.Reader, output any) error {
 	token, err := accessToken()
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(method, todoistAPIBaseURL+path, body)
+	ctx, cancel := context.WithTimeout(context.Background(), todoistRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, method, todoistAPIBaseURL+path, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := todoistHTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("todoist API returned %s: %s", resp.Status, raw)
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return fmt.Errorf("todoist API returned %s: %s", resp.Status, strings.TrimSpace(string(raw)))
 	}
 	if output == nil {
 		return nil
@@ -56,7 +69,7 @@ func createTodoistTask(p plan, dueDate time.Time) (string, error) {
 	var result struct {
 		ID string `json:"id"`
 	}
-	if err := todoistRequest("POST", "/tasks", strings.NewReader(string(encoded)), &result); err != nil {
+	if err := todoistRequest("POST", "/tasks", bytes.NewReader(encoded), &result); err != nil {
 		return "", err
 	}
 	if result.ID == "" {
@@ -66,16 +79,63 @@ func createTodoistTask(p plan, dueDate time.Time) (string, error) {
 }
 
 func createScheduleTasks(p plan) error {
-	for _, dueDate := range occurrences(p) {
-		todoistID, err := createTodoistTask(p, dueDate)
-		if err != nil {
-			return err
-		}
-		if err := recordTodoistTask(p.ID, dueDate, todoistID); err != nil {
-			return err
-		}
+	dates := occurrences(p)
+	tasks := make([]todoistTaskRecord, len(dates))
+	jobs := make(chan int)
+	errs := make(chan error, 1)
+	var workers sync.WaitGroup
+
+	workerCount := todoistCreateWorkers
+	if len(dates) < workerCount {
+		workerCount = len(dates)
+	}
+	for range workerCount {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				id, err := createTodoistTask(p, dates[index])
+				if err != nil {
+					select {
+					case errs <- err:
+					default:
+					}
+					continue
+				}
+				tasks[index] = todoistTaskRecord{dueDate: dates[index], todoistTaskID: id}
+			}
+		}()
+	}
+	for index := range dates {
+		jobs <- index
+	}
+	close(jobs)
+	workers.Wait()
+	select {
+	case err := <-errs:
+		return errors.Join(err, deleteCreatedTodoistTasks(tasks))
+	default:
+	}
+	if err := recordTodoistTasks(p.ID, tasks); err != nil {
+		return errors.Join(err, deleteCreatedTodoistTasks(tasks))
 	}
 	return nil
+}
+
+// deleteCreatedTodoistTasks compensates for a failed batch so that a retry
+// cannot silently create duplicate remote tasks. It intentionally attempts all
+// deletions before returning the first failure.
+func deleteCreatedTodoistTasks(tasks []todoistTaskRecord) error {
+	var result error
+	for _, task := range tasks {
+		if task.todoistTaskID == "" {
+			continue
+		}
+		if err := todoistRequest("DELETE", "/tasks/"+task.todoistTaskID, nil, nil); err != nil {
+			result = errors.Join(result, err)
+		}
+	}
+	return result
 }
 
 func deletePlanAndTodoistTasks(p plan) (int, error) {

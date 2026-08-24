@@ -58,14 +58,21 @@ func deleteSecret() error {
 }
 
 func formRequest(values url.Values) (tokenStore, error) {
-	resp, err := http.PostForm("https://api.todoist.com/oauth/access_token", values)
+	ctx, cancel := context.WithTimeout(context.Background(), todoistRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.todoist.com/oauth/access_token", strings.NewReader(values.Encode()))
+	if err != nil {
+		return tokenStore{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := todoistHTTPClient.Do(req)
 	if err != nil {
 		return tokenStore{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		body, _ := io.ReadAll(resp.Body)
-		return tokenStore{}, fmt.Errorf("todoist token request failed: %s", body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return tokenStore{}, fmt.Errorf("todoist token request failed: %s", strings.TrimSpace(string(body)))
 	}
 	var token tokenStore
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
@@ -182,13 +189,22 @@ func todoistProjects() ([]project, error) {
 	if err != nil {
 		return nil, err
 	}
-	req, _ := http.NewRequest("GET", "https://api.todoist.com/api/v1/projects", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), todoistRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.todoist.com/api/v1/projects", nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := todoistHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, fmt.Errorf("todoist projects request returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
 	var result struct {
 		Results []project `json:"results"`
 	}
