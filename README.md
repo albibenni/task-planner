@@ -67,7 +67,9 @@ task-planner help
 
    It lists Todoist projects by name, accepts `today`, `tomorrow`, `YYYY-MM-DD`,
    `DD-MM-YYYY`, and `DD/MM/YY` dates, and creates tasks immediately for the inclusive
-   range. Choose every day, every other day, or a Monday-first set of weekdays.
+   range. For the end date, use `1w`, `2w`, and so on for a number of weeks after the
+   start date, or `1m`, `2m`, and so on for calendar months after it. Choose every day,
+   every other day, or a Monday-first set of weekdays.
    Similar task wording is shown before the final confirmation; choose whether it is a
    duplicate, then confirm the exact range and task count.
 5. Review active schedules:

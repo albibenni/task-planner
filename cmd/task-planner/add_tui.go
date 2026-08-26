@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -181,7 +182,13 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.step > 0 {
-			date, err := parseDate(*value, time.Now())
+			var date time.Time
+			var err error
+			if m.step == 1 {
+				date, err = parseDate(*value, time.Now())
+			} else {
+				date, err = parseEndDate(*value, m.startDate, time.Now())
+			}
 			if err != nil {
 				m.errorMessage = err.Error()
 				return m, nil
@@ -306,7 +313,11 @@ func (m addModel) View() string {
 		input := string(runes[:m.textCursor]) + "█" + string(runes[m.textCursor:])
 		builder.WriteString(inputStyle.Render(input) + "\n\n")
 		if m.step > 0 {
-			builder.WriteString(mutedStyle.Render("Dates: today · tomorrow · 2026-08-20 · 20-08-2026 · 20/8/26") + "\n")
+			dateHelp := "Dates: today · tomorrow · 2026-08-20 · 20-08-2026 · 20/8/26"
+			if m.step == 2 {
+				dateHelp += " · End date: 1w (one week) · 2m (two months)"
+			}
+			builder.WriteString(mutedStyle.Render(dateHelp) + "\n")
 		}
 		builder.WriteString(mutedStyle.Render("←/→ move · Home/End jump · Backspace/Delete edit · Enter continue · Esc cancel") + "\n")
 	} else {
@@ -452,4 +463,20 @@ func parseDate(value string, now time.Time) (time.Time, error) {
 		}
 	}
 	return time.Time{}, errors.New("use today, tomorrow, YYYY-MM-DD, DD-MM-YYYY, or DD/MM/YY")
+}
+
+func parseEndDate(value string, startDate, now time.Time) (time.Time, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) >= 2 {
+		amount, err := strconv.Atoi(value[:len(value)-1])
+		if err == nil && amount > 0 {
+			switch value[len(value)-1] {
+			case 'w':
+				return startDate.AddDate(0, 0, amount*7), nil
+			case 'm':
+				return startDate.AddDate(0, amount, 0), nil
+			}
+		}
+	}
+	return parseDate(value, now)
 }

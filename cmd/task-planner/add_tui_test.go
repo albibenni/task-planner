@@ -57,6 +57,31 @@ func TestParseDateFormats(t *testing.T) {
 	}
 }
 
+func TestParseEndDateRelativeToStart(t *testing.T) {
+	start := time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC)
+	now := start.Add(12 * time.Hour)
+	for value, want := range map[string]string{
+		"1w": "2026-08-27",
+		"2w": "2026-09-03",
+		"1m": "2026-09-20",
+		"2m": "2026-10-20",
+	} {
+		date, err := parseEndDate(value, start, now)
+		if err != nil || date.Format(time.DateOnly) != want {
+			t.Errorf("parseEndDate(%q) = %v, %v; want %s", value, date, err, want)
+		}
+	}
+}
+
+func TestParseEndDateKeepsAbsoluteDates(t *testing.T) {
+	start := time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC)
+	now := start.Add(12 * time.Hour)
+	date, err := parseEndDate("22/8/26", start, now)
+	if err != nil || date.Format(time.DateOnly) != "2026-08-22" {
+		t.Fatalf("parseEndDate() = %v, %v", date, err)
+	}
+}
+
 func TestWeekdayPickerStartsWithMonday(t *testing.T) {
 	model := addModel{step: 4, weekdays: map[int16]bool{}}
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeySpace})
