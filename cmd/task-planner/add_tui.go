@@ -280,6 +280,7 @@ func (m addModel) View() string {
 	}
 	if m.completed {
 		builder.WriteString("\n" + successStyle.Render(fmt.Sprintf("✓ Created %d Todoist task(s) for %q.", m.createdTasks, m.content)) + "\n\n")
+		builder.WriteString(successStyle.Render(fmt.Sprintf("Scheduled from %s till %s.", formatScheduleDate(m.startDate), formatScheduleDate(m.endDate))) + "\n\n")
 		builder.WriteString(mutedStyle.Render("Press any key to close.") + "\n")
 		return builder.String()
 	}
@@ -479,4 +480,24 @@ func parseEndDate(value string, startDate, now time.Time) (time.Time, error) {
 		}
 	}
 	return parseDate(value, now)
+}
+
+func formatScheduleDate(date time.Time) string {
+	return fmt.Sprintf("%d%s of %s %d", date.Day(), ordinalSuffix(date.Day()), date.Month(), date.Year())
+}
+
+func ordinalSuffix(day int) string {
+	if day%100 >= 11 && day%100 <= 13 {
+		return "th"
+	}
+	switch day % 10 {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	default:
+		return "th"
+	}
 }

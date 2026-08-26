@@ -82,6 +82,24 @@ func TestParseEndDateKeepsAbsoluteDates(t *testing.T) {
 	}
 }
 
+func TestFormatScheduleDate(t *testing.T) {
+	for day, want := range map[int]string{
+		1:  "1st of August 2026",
+		2:  "2nd of August 2026",
+		3:  "3rd of August 2026",
+		4:  "4th of August 2026",
+		11: "11th of August 2026",
+		12: "12th of August 2026",
+		13: "13th of August 2026",
+		26: "26th of August 2026",
+	} {
+		date := time.Date(2026, time.August, day, 0, 0, 0, 0, time.UTC)
+		if got := formatScheduleDate(date); got != want {
+			t.Errorf("formatScheduleDate(%v) = %q, want %q", date, got, want)
+		}
+	}
+}
+
 func TestWeekdayPickerStartsWithMonday(t *testing.T) {
 	model := addModel{step: 4, weekdays: map[int16]bool{}}
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeySpace})
@@ -117,6 +135,20 @@ func TestAddConfirmationViewsRender(t *testing.T) {
 	finalView := (addModel{step: 8, content: "Plan the day", projects: []project{{ID: "inbox"}}, startDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), endDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), recurrence: "daily"}).View()
 	if !strings.Contains(finalView, "Create 1 Todoist task") {
 		t.Fatalf("unexpected final confirmation view: %s", finalView)
+	}
+}
+
+func TestAddCompletionViewShowsScheduledRange(t *testing.T) {
+	model := addModel{
+		completed:    true,
+		createdTasks: 2,
+		content:      "Plan the day",
+		startDate:    time.Date(2026, time.August, 26, 0, 0, 0, 0, time.UTC),
+		endDate:      time.Date(2026, time.September, 5, 0, 0, 0, 0, time.UTC),
+	}
+	view := model.View()
+	if !strings.Contains(view, "Scheduled from 26th of August 2026 till 5th of September 2026.") {
+		t.Fatalf("completion view does not show scheduled range: %s", view)
 	}
 }
 
