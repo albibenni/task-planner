@@ -80,11 +80,11 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok || m.loading {
 		return m, nil
 	}
-	if m.completed || m.creationError != nil {
-		if ok {
-			return m, tea.Quit
-		}
-		return m, nil
+	if m.completed {
+		return m.updateCompletedSchedule(key)
+	}
+	if m.creationError != nil {
+		return m, tea.Quit
 	}
 	pressed := key.String()
 	if pressed == "ctrl+c" || pressed == "esc" {
@@ -141,6 +141,29 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m addModel) updateCompletedSchedule(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "left", "right", "up", "down", "tab":
+		m.cursor = 1 - m.cursor
+	case "y":
+		m.cursor = 0
+	case "n":
+		m.cursor = 1
+	case "ctrl+c", "esc":
+		return m, tea.Quit
+	case "enter":
+		if m.cursor == 0 {
+			return newAddModel(), nil
+		}
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func newAddModel() addModel {
+	return addModel{weekdays: map[int16]bool{}}
 }
 
 func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -282,8 +305,8 @@ func (m addModel) View() string {
 	if m.completed {
 		builder.WriteString("\n" + successStyle.Render(fmt.Sprintf("✓ Created %d Todoist task(s) for %q.", m.createdTasks, m.content)) + "\n\n")
 		builder.WriteString(successStyle.Render(fmt.Sprintf("Scheduled from %s till %s.", formatScheduleDate(m.startDate), formatScheduleDate(m.endDate))) + "\n\n")
-		builder.WriteString(mutedStyle.Render("Press any key to close.") + "\n")
-		return builder.String()
+		builder.WriteString(promptStyle.Render("Do you want to schedule another task?") + "\n\n")
+		return m.confirmationChoices(&builder, "Yes, schedule another task", "No, close")
 	}
 	if m.creationError != nil {
 		builder.WriteString("\n" + warningStyle.Render("! Creation did not finish: "+m.creationError.Error()) + "\n\n")
@@ -360,7 +383,7 @@ func (m addModel) confirmationChoices(builder *strings.Builder, yes, no string) 
 }
 
 func guidedAdd() error {
-	model, err := runAddModel(addModel{weekdays: map[int16]bool{}})
+	model, err := runAddModel(newAddModel())
 	if err != nil {
 		return err
 	}

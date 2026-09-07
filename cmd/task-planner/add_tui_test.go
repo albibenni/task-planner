@@ -58,6 +58,19 @@ func TestAddModelShowsCreationFailureInsideTUI(t *testing.T) {
 	}
 }
 
+func TestCompletedScheduleCanStartAnotherSchedule(t *testing.T) {
+	model := addModel{
+		completed:    true,
+		createdTasks: 2,
+		content:      "Plan the day",
+		weekdays:     map[int16]bool{},
+	}
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.completed || model.step != 0 || model.content != "" || model.createdTasks != 0 {
+		t.Fatalf("choosing another schedule should reset the add flow: %#v", model)
+	}
+}
+
 func TestParseDateFormats(t *testing.T) {
 	now := time.Date(2026, time.August, 19, 12, 0, 0, 0, time.UTC)
 	for _, value := range []string{"2026-08-20", "20-08-2026", "20/08/2026", "20/8/26"} {
