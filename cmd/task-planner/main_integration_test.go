@@ -28,15 +28,16 @@ func TestSharedPostgresSchedules(t *testing.T) {
 	}
 	start := time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC)
 	p := plan{ID: "plan-the-day", Content: "Plan the day", ProjectID: "project-123", StartDate: start, EndDate: start.AddDate(0, 0, 2), Recurrence: "daily"}
+	duplicatePlan := plan{ID: "plan-the-day-again", Content: "Plan the day", ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
 	secondPlan := plan{ID: "plan-weekly-review", Content: "Plan weekly review", ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
 	thirdPlan := plan{ID: "write-report", Content: "Write report", ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
-	for _, schedule := range []plan{p, secondPlan, thirdPlan} {
+	for _, schedule := range []plan{p, duplicatePlan, secondPlan, thirdPlan} {
 		if err := addPlan(schedule); err != nil {
 			t.Fatal(err)
 		}
 	}
 	all, err := plans()
-	if err != nil || len(all) != 3 {
+	if err != nil || len(all) != 4 {
 		t.Fatalf("unexpected schedules: %#v, %v", all, err)
 	}
 	firstPage, err := plansPage("plan", 1, 0)
@@ -44,7 +45,7 @@ func TestSharedPostgresSchedules(t *testing.T) {
 		t.Fatalf("unexpected first filtered page: %#v, %v", firstPage, err)
 	}
 	secondPage, err := plansPage("plan", 1, 1)
-	if err != nil || len(secondPage) != 1 || secondPage[0].Content != secondPlan.Content {
+	if err != nil || len(secondPage) != 1 || secondPage[0].ID != duplicatePlan.ID {
 		t.Fatalf("unexpected second filtered page: %#v, %v", secondPage, err)
 	}
 	if err := recordTodoistTask(p.ID, start, "todoist-1"); err != nil {
@@ -69,7 +70,7 @@ func TestSharedPostgresSchedules(t *testing.T) {
 	if err != nil || deleted != 1 {
 		t.Fatalf("unexpected deletion result: %d, %v", deleted, err)
 	}
-	for _, schedule := range []plan{secondPlan, thirdPlan} {
+	for _, schedule := range []plan{duplicatePlan, secondPlan, thirdPlan} {
 		if err := removePlan(schedule.ID); err != nil {
 			t.Fatal(err)
 		}

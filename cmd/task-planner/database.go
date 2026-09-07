@@ -39,7 +39,7 @@ func dbURL() (string, error) {
 }
 
 func setupDB(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, `create table if not exists task_planner_schedules (id text primary key,content text not null unique,project_id text not null,start_date date not null,end_date date not null check(end_date >= start_date),recurrence text not null check(recurrence in ('daily','alternate','weekdays')),weekdays smallint[] not null default '{}',priority smallint check(priority between 1 and 4),created_at timestamptz not null default now()); create table if not exists task_planner_schedule_tasks (schedule_id text not null references task_planner_schedules(id) on delete cascade,due_date date not null,todoist_task_id text not null unique,primary key(schedule_id,due_date));`)
+	_, err := conn.Exec(ctx, `create table if not exists task_planner_schedules (id text primary key,content text not null,project_id text not null,start_date date not null,end_date date not null check(end_date >= start_date),recurrence text not null check(recurrence in ('daily','alternate','weekdays')),weekdays smallint[] not null default '{}',priority smallint check(priority between 1 and 4),created_at timestamptz not null default now()); alter table task_planner_schedules drop constraint if exists task_planner_schedules_content_key; create table if not exists task_planner_schedule_tasks (schedule_id text not null references task_planner_schedules(id) on delete cascade,due_date date not null,todoist_task_id text not null unique,primary key(schedule_id,due_date));`)
 	return err
 }
 
@@ -67,12 +67,12 @@ func addPlan(p plan) error {
 		if weekdays == nil {
 			weekdays = []int16{}
 		}
-		tag, err := conn.Exec(ctx, "insert into task_planner_schedules(id,content,project_id,start_date,end_date,recurrence,weekdays,priority) values($1,$2,$3,$4,$5,$6,$7,$8) on conflict(content) do nothing", p.ID, p.Content, p.ProjectID, p.StartDate, p.EndDate, p.Recurrence, weekdays, p.Priority)
+		tag, err := conn.Exec(ctx, "insert into task_planner_schedules(id,content,project_id,start_date,end_date,recurrence,weekdays,priority) values($1,$2,$3,$4,$5,$6,$7,$8) on conflict(id) do nothing", p.ID, p.Content, p.ProjectID, p.StartDate, p.EndDate, p.Recurrence, weekdays, p.Priority)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return errors.New("a schedule with that task text already exists")
+			return errors.New("a schedule with that ID already exists")
 		}
 		return nil
 	})

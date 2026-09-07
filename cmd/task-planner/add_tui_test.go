@@ -15,6 +15,17 @@ func TestSlug(t *testing.T) {
 	}
 }
 
+func TestDuplicateSchedulesGetDistinctIDs(t *testing.T) {
+	model := addModel{
+		content:  "Plan the day",
+		projects: []project{{ID: "inbox"}},
+		weekdays: map[int16]bool{},
+	}
+	if first, second := model.toPlan(), model.toPlan(); first.ID == second.ID {
+		t.Fatalf("duplicate schedules must have distinct IDs, got %q", first.ID)
+	}
+}
+
 func TestAddModelCollectsDateRangeAndRecurrence(t *testing.T) {
 	model := addModel{weekdays: map[int16]bool{}}
 	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Plan")})

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -376,9 +377,17 @@ func (m addModel) toPlan() plan {
 			weekdays = append(weekdays, day)
 		}
 	}
-	sum := sha256.Sum256([]byte(m.content))
 	selectedProject := m.projects[m.projectIndex]
-	return plan{ID: fmt.Sprintf("%s-%x", slug(m.content), sum[:4]), Content: m.content, ProjectID: selectedProject.ID, StartDate: m.startDate, EndDate: m.endDate, Recurrence: m.recurrence, Weekdays: weekdays, Priority: &m.priority}
+	return plan{ID: newScheduleID(m.content), Content: m.content, ProjectID: selectedProject.ID, StartDate: m.startDate, EndDate: m.endDate, Recurrence: m.recurrence, Weekdays: weekdays, Priority: &m.priority}
+}
+
+func newScheduleID(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	randomBytes := make([]byte, 8)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return fmt.Sprintf("%s-%x-%d", slug(content), sum[:4], time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%s-%x-%x", slug(content), sum[:4], randomBytes)
 }
 
 func runAddModel(model addModel) (addModel, error) {
