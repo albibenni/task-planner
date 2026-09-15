@@ -25,7 +25,7 @@ Usage:
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
   task-planner delete          Search and delete a plan in the guided TUI
-  task-planner delete old      Review past schedules and remove them from Supabase only
+  task-planner delete old      Preview and remove all past schedules from Supabase only
   task-planner completion bash|zsh
   task-planner help [command [subcommand ...]]
 

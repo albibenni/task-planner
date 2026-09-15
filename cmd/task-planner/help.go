@@ -81,12 +81,12 @@ var helpTopics = map[string]helpTopic{
 		usage:       "task-planner delete",
 		description: "Search for and delete a shared schedule in the guided TUI.",
 		details:     "Type at least two characters; after a brief pause, matching pages are fetched from Supabase. Confirm full deletion to remove the schedule and its Todoist tasks. For a past schedule, database only removes the Supabase schedule while leaving Todoist tasks unchanged. After deletion, choose another search or close.",
-		subcommands: "task-planner delete old  List past schedules immediately and remove selected schedules from Supabase only.",
+		subcommands: "task-planner delete old  Preview and remove all past schedules from Supabase only.",
 	},
 	"delete old": {
 		usage:       "task-planner delete old",
-		description: "Review schedules whose end date is before today and remove them from Supabase only.",
-		details:     "Opens a paginated list without a text search. Select a past schedule and explicitly confirm deletion. The schedule and stored task IDs are removed from Supabase; Todoist tasks stay unchanged. Choose whether to delete another past schedule or close.",
+		description: "Preview every schedule whose end date is before today, then remove them all from Supabase only.",
+		details:     "Opens a paginated preview without a text search. Review the schedules, then explicitly confirm one bulk deletion. Only the previewed schedules and their stored task IDs are removed from Supabase. If a previewed schedule has been removed or is no longer past, nothing is deleted and you must reload the preview. Todoist tasks stay unchanged.",
 	},
 	"completion": {
 		usage:       "task-planner completion bash|zsh",

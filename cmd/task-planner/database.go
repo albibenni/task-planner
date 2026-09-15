@@ -110,10 +110,10 @@ func plansCount(query string) (int, error) {
 	return int(count), err
 }
 
-func pastPlansPage(today string, limit, offset int) ([]plan, error) {
+func pastPlans(today string) ([]plan, error) {
 	var result []plan
 	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		rows, err := conn.Query(ctx, "select id,content,project_id,start_date,end_date,recurrence,weekdays,priority from task_planner_schedules where end_date < $1::date order by end_date,content,id limit $2 offset $3", today, limit, offset)
+		rows, err := conn.Query(ctx, "select id,content,project_id,start_date,end_date,recurrence,weekdays,priority from task_planner_schedules where end_date < $1::date order by end_date,content,id", today)
 		if err != nil {
 			return err
 		}
@@ -130,24 +130,24 @@ func pastPlansPage(today string, limit, offset int) ([]plan, error) {
 	return result, err
 }
 
-func pastPlansCount(today string) (int, error) {
-	var count int64
-	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		return conn.QueryRow(ctx, "select count(*) from task_planner_schedules where end_date < $1::date", today).Scan(&count)
-	})
-	return int(count), err
-}
-
-func removePastPlan(id, today string) error {
+func removePastPlans(ids []string, today string) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	return withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		tag, err := conn.Exec(ctx, "delete from task_planner_schedules where id=$1 and end_date < $2::date", id, today)
+		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return errors.New("schedule was not found or is no longer past")
+		defer tx.Rollback(ctx)
+		tag, err := tx.Exec(ctx, "delete from task_planner_schedules where id = any($1::text[]) and end_date < $2::date", ids, today)
+		if err != nil {
+			return err
 		}
-		return nil
+		if tag.RowsAffected() != int64(len(ids)) {
+			return errors.New("past schedules changed since the preview; nothing was deleted, reopen `task-planner delete old` to review them again")
+		}
+		return tx.Commit(ctx)
 	})
 }
 

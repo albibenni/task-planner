@@ -9,63 +9,48 @@ import (
 )
 
 type oldPlansLoadedMsg struct {
-	page, total int
-	plans       []plan
-	err         error
+	plans []plan
+	err   error
 }
 
 type oldDeleteCompletedMsg struct {
-	err error
+	deletedCount int
+	err          error
 }
 
 type oldDeleteModel struct {
 	plans        []plan
-	page, total  int
-	cursor       int
-	selected     *plan
+	page, cursor int
+	deletedCount int
 	loading      bool
 	confirming   bool
 	done         bool
 	errorMessage string
 }
 
-func (m oldDeleteModel) Init() tea.Cmd { return loadOldPlans(m.page) }
+func (m oldDeleteModel) Init() tea.Cmd { return loadOldPlans() }
 
 func (m oldDeleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case oldPlansLoadedMsg:
-		if msg.page != m.page {
-			return m, nil
-		}
 		m.loading = false
 		if msg.err != nil {
 			m.errorMessage = msg.err.Error()
 			return m, nil
 		}
-		m.errorMessage = ""
-		m.total = msg.total
-		if m.total == 0 {
-			m.page = 0
-		}
-		if m.total > 0 && m.page*deletePageSize >= m.total {
-			m.page = (m.total - 1) / deletePageSize
-			m.loading = true
-			return m, loadOldPlans(m.page)
-		}
 		m.plans = msg.plans
-		m.cursor = min(m.cursor, max(0, len(m.plans)-1))
+		m.page = 0
+		m.errorMessage = ""
 		return m, nil
 	case oldDeleteCompletedMsg:
 		m.loading = false
+		m.confirming = false
 		if msg.err != nil {
 			m.errorMessage = msg.err.Error()
-			m.confirming = false
-			m.cursor = 0
 			return m, nil
 		}
-		m.confirming = false
+		m.deletedCount = msg.deletedCount
 		m.done = true
-		m.cursor = 0
 		return m, nil
 	}
 
@@ -74,33 +59,17 @@ func (m oldDeleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	pressed := key.String()
-	if pressed == "ctrl+c" {
-		return m, tea.Quit
-	}
 	if m.loading {
-		if pressed == "esc" {
+		if !m.confirming && (pressed == "esc" || pressed == "ctrl+c") {
 			return m, tea.Quit
 		}
 		return m, nil
 	}
+	if pressed == "ctrl+c" {
+		return m, tea.Quit
+	}
 	if m.done {
-		switch pressed {
-		case "up", "down", "left", "right", "tab":
-			m.cursor = 1 - m.cursor
-		case "y":
-			m.cursor = 0
-		case "n":
-			m.cursor = 1
-		case "enter":
-			if m.cursor == 1 {
-				return m, tea.Quit
-			}
-			m.done = false
-			m.selected = nil
-			m.plans = nil
-			m.loading = true
-			return m, loadOldPlans(m.page)
-		case "esc":
+		if pressed == "enter" || pressed == "esc" {
 			return m, tea.Quit
 		}
 		return m, nil
@@ -116,13 +85,11 @@ func (m oldDeleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.cursor == 0 {
 				m.loading = true
-				return m, deleteOldSelectedPlan(*m.selected)
+				return m, deleteOldPlans(m.plans)
 			}
 			m.confirming = false
-			m.cursor = 0
 		case "esc":
 			m.confirming = false
-			m.cursor = 0
 		}
 		return m, nil
 	}
@@ -131,38 +98,23 @@ func (m oldDeleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if pressed == "r" && m.errorMessage != "" {
 		m.loading = true
-		m.plans = nil
-		return m, loadOldPlans(m.page)
+		return m, loadOldPlans()
 	}
+	if m.errorMessage != "" {
+		return m, nil
+	}
+	pageCount := (len(m.plans) + deletePageSize - 1) / deletePageSize
 	switch pressed {
-	case "up":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down":
-		if m.cursor < len(m.plans)-1 {
-			m.cursor++
-		}
-	case "left":
+	case "up", "left":
 		if m.page > 0 {
 			m.page--
-			m.plans = nil
-			m.cursor = 0
-			m.loading = true
-			return m, loadOldPlans(m.page)
 		}
-	case "right":
-		if (m.page+1)*deletePageSize < m.total {
+	case "down", "right":
+		if m.page+1 < pageCount {
 			m.page++
-			m.plans = nil
-			m.cursor = 0
-			m.loading = true
-			return m, loadOldPlans(m.page)
 		}
 	case "enter":
 		if len(m.plans) > 0 {
-			selected := m.plans[m.cursor]
-			m.selected = &selected
 			m.confirming = true
 			m.cursor = 1
 		}
@@ -173,27 +125,23 @@ func (m oldDeleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m oldDeleteModel) View() string {
 	var builder strings.Builder
 	if m.done {
-		builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %q from Supabase only. Todoist tasks were left unchanged.", m.selected.Content)))
-		builder.WriteString("\n\n")
-		builder.WriteString(promptStyle.Render("Do you want to delete another past schedule?"))
-		builder.WriteString("\n\n")
-		for index, choice := range []string{"Yes, show past schedules", "No, close"} {
-			if index == m.cursor {
-				builder.WriteString(selectedStyle.Render("› " + choice))
-			} else {
-				builder.WriteString("  " + choice)
-			}
-			builder.WriteString("\n")
+		builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %d past schedules from Supabase only. Todoist tasks were left unchanged.", m.deletedCount)))
+		builder.WriteString("\n\n" + mutedStyle.Render("Enter or Esc close") + "\n")
+		return builder.String()
+	}
+	if m.loading {
+		if m.confirming {
+			builder.WriteString(titleStyle.Render("Deleting previewed past schedules from Supabase…") + "\n")
+		} else {
+			builder.WriteString(titleStyle.Render("Loading past schedules…") + "\n")
 		}
-		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter confirm · Esc close") + "\n")
 		return builder.String()
 	}
 	if m.confirming {
-		builder.WriteString(titleStyle.Render("Delete past schedule from Supabase?") + "\n\n")
-		fmt.Fprintf(&builder, "%q — %s to %s\n\n", m.selected.Content, m.selected.StartDate.Format("02 Jan 2006"), m.selected.EndDate.Format("02 Jan 2006"))
-		builder.WriteString(warningStyle.Render("The schedule and stored task IDs will be removed from Supabase. Todoist tasks will stay unchanged; task-planner can no longer delete them."))
+		builder.WriteString(titleStyle.Render(fmt.Sprintf("Delete all %d past schedules from Supabase?", len(m.plans))) + "\n\n")
+		builder.WriteString(warningStyle.Render("All schedules shown in the preview and their stored task IDs will be removed from Supabase. Todoist tasks will stay unchanged; task-planner can no longer delete them."))
 		builder.WriteString("\n\n")
-		for index, choice := range []string{"Yes, delete from Supabase only", "No, keep it"} {
+		for index, choice := range []string{"Yes, delete all from Supabase only", "No, keep them"} {
 			if index == m.cursor {
 				builder.WriteString(selectedStyle.Render("› " + choice))
 			} else {
@@ -201,57 +149,44 @@ func (m oldDeleteModel) View() string {
 			}
 			builder.WriteString("\n")
 		}
-		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter confirm · Esc cancel") + "\n")
+		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter confirm · Esc return to preview") + "\n")
 		return builder.String()
 	}
-	builder.WriteString(titleStyle.Render("Delete a past schedule from Supabase") + "\n")
-	if m.loading {
-		builder.WriteString(mutedStyle.Render("Loading past schedules…") + "\n")
-		return builder.String()
-	}
+	builder.WriteString(titleStyle.Render("Past schedules to delete from Supabase") + "\n")
 	if m.errorMessage != "" {
 		builder.WriteString(warningStyle.Render("! "+m.errorMessage) + "\n")
-		builder.WriteString(mutedStyle.Render("R retry · Esc close") + "\n")
-		if len(m.plans) == 0 {
-			return builder.String()
-		}
+		builder.WriteString(mutedStyle.Render("R reload preview · Esc close") + "\n")
+		return builder.String()
 	}
 	if len(m.plans) == 0 {
 		builder.WriteString(mutedStyle.Render("No past schedules remain in Supabase. · Esc close") + "\n")
 		return builder.String()
 	}
-	for index, p := range m.plans {
-		entry := fmt.Sprintf("%s  ·  %s to %s", p.Content, p.StartDate.Format("02 Jan 2006"), p.EndDate.Format("02 Jan 2006"))
-		if index == m.cursor {
-			builder.WriteString(selectedStyle.Render("› " + entry))
-		} else {
-			builder.WriteString("  " + entry)
-		}
-		builder.WriteString("\n")
+	start := m.page * deletePageSize
+	end := min(start+deletePageSize, len(m.plans))
+	for _, p := range m.plans[start:end] {
+		fmt.Fprintf(&builder, "  %q  ·  %s to %s\n", p.Content, p.StartDate.Format("02 Jan 2006"), p.EndDate.Format("02 Jan 2006"))
 	}
-	pages := (m.total + deletePageSize - 1) / deletePageSize
-	builder.WriteString("\n" + mutedStyle.Render(fmt.Sprintf("Page %d of %d · %d past schedules · ↑/↓ select · ←/→ page · Enter delete · Esc close", m.page+1, pages, m.total)) + "\n")
+	pageCount := (len(m.plans) + deletePageSize - 1) / deletePageSize
+	builder.WriteString("\n" + mutedStyle.Render(fmt.Sprintf("Page %d of %d · %d past schedules · ↑/↓ or ←/→ page · Enter review deleting all · Esc close", m.page+1, pageCount, len(m.plans))) + "\n")
 	return builder.String()
 }
 
-func loadOldPlans(page int) tea.Cmd {
+func loadOldPlans() tea.Cmd {
 	return func() tea.Msg {
-		today := time.Now().Format(time.DateOnly)
-		total, err := pastPlansCount(today)
-		if err != nil {
-			return oldPlansLoadedMsg{page: page, err: err}
-		}
-		if total == 0 {
-			return oldPlansLoadedMsg{page: page}
-		}
-		plans, err := pastPlansPage(today, deletePageSize, page*deletePageSize)
-		return oldPlansLoadedMsg{page: page, total: total, plans: plans, err: err}
+		plans, err := pastPlans(time.Now().Format(time.DateOnly))
+		return oldPlansLoadedMsg{plans: plans, err: err}
 	}
 }
 
-func deleteOldSelectedPlan(p plan) tea.Cmd {
+func deleteOldPlans(plans []plan) tea.Cmd {
+	ids := make([]string, len(plans))
+	for index, p := range plans {
+		ids[index] = p.ID
+	}
 	return func() tea.Msg {
-		return oldDeleteCompletedMsg{err: removePastPlan(p.ID, time.Now().Format(time.DateOnly))}
+		err := removePastPlans(ids, time.Now().Format(time.DateOnly))
+		return oldDeleteCompletedMsg{deletedCount: len(ids), err: err}
 	}
 }
 

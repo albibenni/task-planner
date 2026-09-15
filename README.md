@@ -135,11 +135,12 @@ from Supabase while leaving Todoist tasks unchanged. Task planner can no longer 
 those tasks afterward. Use it when the tasks have already been handled in Todoist.
 `task-planner check` lists those past schedules still in Supabase
 and points you to `task-planner delete old`; it does not inspect Todoist completion state.
-`task-planner delete old` opens those past schedules directly in a paginated list and
-deletes the selected schedule from Supabase only after confirmation. It never deletes
-Todoist tasks. After a successful deletion, choose whether to review another past
-schedule or close. The regular `task-planner delete` command also offers another
-search after a successful deletion.
+`task-planner delete old` opens a paginated preview of every past schedule. After you
+review the list, one confirmation removes all previewed schedules and their stored task
+IDs from Supabase. It never deletes Todoist tasks. If a previewed schedule is removed or
+is no longer past before confirmation, the deletion is cancelled and the preview must be
+reloaded. The regular
+`task-planner delete` command still offers another search after a successful deletion.
 
 Enable Bash completion with:
 

@@ -14,7 +14,7 @@ func TestHelpDescribesCommandGroupsAndLeafCommands(t *testing.T) {
 		{[]string{"auth"}, []string{"login", "logout", "projects"}},
 		{[]string{"config", "default-project"}, []string{"set", "clear", "Todoist project ID"}},
 		{[]string{"delete"}, []string{"two characters", "Supabase", "database only"}},
-		{[]string{"delete", "old"}, []string{"past", "Supabase only", "Todoist tasks stay unchanged"}},
+		{[]string{"delete", "old"}, []string{"past", "bulk deletion", "Supabase only", "Todoist tasks stay unchanged"}},
 		{[]string{"completion", "bash"}, []string{"task-planner completion bash", "Bash"}},
 	} {
 		var output bytes.Buffer

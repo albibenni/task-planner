@@ -17,7 +17,7 @@ func TestCheckReportsPastSchedulesStillInDatabase(t *testing.T) {
 	var output bytes.Buffer
 	reportPastSchedules(&output, all, today)
 	got := output.String()
-	for _, expected := range []string{"1 past schedule", "Old plan", "20 Aug 2026", "task-planner delete old", "Supabase only"} {
+	for _, expected := range []string{"1 past schedule", "Old plan", "20 Aug 2026", "task-planner delete old", "all these schedules", "Supabase only"} {
 		if !strings.Contains(got, expected) {
 			t.Errorf("check report lacks %q: %s", expected, got)
 		}
