@@ -85,7 +85,7 @@ func plans() ([]plan, error) {
 func plansPage(query string, limit, offset int) ([]plan, error) {
 	var result []plan
 	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
-		rows, err := conn.Query(ctx, "select id,content,project_id,start_date,end_date,recurrence,weekdays,priority from task_planner_schedules where content ilike $1 order by content limit $2 offset $3", "%"+query+"%", limit, offset)
+		rows, err := conn.Query(ctx, "select id,content,project_id,start_date,end_date,recurrence,weekdays,priority from task_planner_schedules where strpos(lower(content), lower($1)) > 0 order by content,id limit $2 offset $3", query, limit, offset)
 		if err != nil {
 			return err
 		}
@@ -100,6 +100,14 @@ func plansPage(query string, limit, offset int) ([]plan, error) {
 		return rows.Err()
 	})
 	return result, err
+}
+
+func plansCount(query string) (int, error) {
+	var count int64
+	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
+		return conn.QueryRow(ctx, "select count(*) from task_planner_schedules where strpos(lower(content), lower($1)) > 0", query).Scan(&count)
+	})
+	return int(count), err
 }
 
 func removePlan(id string) error {

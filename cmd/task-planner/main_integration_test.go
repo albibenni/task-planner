@@ -50,6 +50,14 @@ func TestSharedPostgresSchedules(t *testing.T) {
 	if err != nil || len(secondPage) != 1 || secondPage[0].ID != duplicatePlan.ID {
 		t.Fatalf("unexpected second filtered page: %#v, %v", secondPage, err)
 	}
+	matching, err := plansCount("plan")
+	if err != nil || matching != 3 {
+		t.Fatalf("unexpected database search count: %d, %v", matching, err)
+	}
+	matching, err = plansCount("%")
+	if err != nil || matching != 0 {
+		t.Fatalf("search characters should be literal, not SQL wildcards: %d, %v", matching, err)
+	}
 	if err := recordTodoistTask(p.ID, start, "todoist-1"); err != nil {
 		t.Fatal(err)
 	}

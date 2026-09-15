@@ -111,8 +111,9 @@ task-planner delete
 task-planner completion bash|zsh
 ```
 
-Task text is the unique plan identifier. `task-planner delete` opens a searchable,
-paginated picker of active plans. After confirmation, it removes the plan from Supabase
+Task text is the unique plan identifier. `task-planner delete` opens a paginated picker.
+Type at least two characters; after a brief typing pause, it fetches matching plans from
+Supabase one page at a time. After confirmation, it removes the plan from Supabase
 and deletes the Todoist tasks created by that schedule. When a schedule ended before today,
 the confirmation also offers **database only**: it removes the schedule and stored task IDs
 from Supabase while leaving Todoist tasks unchanged. Task planner can no longer delete
@@ -120,7 +121,7 @@ those tasks afterward. Use it when the tasks have already been handled in Todois
 `task-planner check` lists those past schedules still in Supabase
 and points you to the delete command; it does not inspect Todoist completion state. After
 a successful deletion, choose whether to delete another plan or close; choosing another
-reloads the active plans.
+returns to an empty search.
 
 Enable Bash completion with:
 
