@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -83,5 +84,50 @@ func TestDeleteCompletionCanClose(t *testing.T) {
 	}
 	if _, ok := command().(tea.QuitMsg); !ok {
 		t.Fatalf("closing should quit rather than reload plans: %T", command())
+	}
+}
+
+func TestPastScheduleOffersDatabaseOnlyDeletion(t *testing.T) {
+	old := plan{ID: "old", Content: "Old plan", EndDate: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)}
+	model := deleteModel{plans: []plan{old}}
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(deleteModel)
+	view := model.View()
+	if model.cursor != 2 || !strings.Contains(view, "database only") || !strings.Contains(view, "Todoist tasks stay") {
+		t.Fatalf("past schedules should offer a database-only choice and default to keeping the schedule: %#v, %s", model, view)
+	}
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	model = updated.(deleteModel)
+	if model.cursor != 1 {
+		t.Fatalf("one step up should select database-only deletion: %#v", model)
+	}
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(deleteModel)
+	if !model.loading || command == nil {
+		t.Fatalf("database-only deletion should start after explicit selection: %#v", model)
+	}
+	updated, _ = model.Update(deleteCompletedMsg{databaseOnly: true})
+	model = updated.(deleteModel)
+	if !model.done || !strings.Contains(model.View(), "Todoist tasks were left unchanged") {
+		t.Fatalf("completion should identify database-only deletion: %#v, %s", model, model.View())
+	}
+}
+
+func TestDatabaseOnlyChoiceIsLimitedToPastSchedules(t *testing.T) {
+	future := plan{ID: "future", Content: "Future plan", EndDate: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)}
+	model := deleteModel{plans: []plan{future}}
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(deleteModel)
+	if model.cursor != 1 || strings.Contains(model.View(), "database only") {
+		t.Fatalf("ongoing schedules should keep the original two-choice confirmation: %#v, %s", model, model.View())
+	}
+}
+
+func TestPastScheduleUsesCalendarDate(t *testing.T) {
+	today := time.Date(2026, 9, 15, 23, 0, 0, 0, time.FixedZone("Rome", 2*60*60))
+	sameDay := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	previousDay := sameDay.AddDate(0, 0, -1)
+	if scheduleIsPast(sameDay, today) || !scheduleIsPast(previousDay, today) {
+		t.Fatal("a schedule is past only when its end date is before today's calendar date")
 	}
 }

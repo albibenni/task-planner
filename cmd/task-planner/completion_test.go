@@ -14,8 +14,8 @@ func TestCompletionScripts(t *testing.T) {
 		if !strings.Contains(script, expected) {
 			t.Errorf("%s completion lacks %q", shell, expected)
 		}
-		if !strings.Contains(script, "status") {
-			t.Errorf("%s completion lacks status command", shell)
+		if !strings.Contains(script, "status") || !strings.Contains(script, "check") {
+			t.Errorf("%s completion lacks status or check command", shell)
 		}
 		if !strings.Contains(script, "default-project") || !strings.Contains(script, "set clear") {
 			t.Errorf("%s completion lacks default project commands", shell)

@@ -84,10 +84,11 @@ task-planner help
    `task-planner config default-project clear` to remove the saved default. If the
    project has been removed from Todoist, the picker warns you and starts with the
    first available project.
-5. Review active schedules:
+5. Review active schedules and find past schedules still in Supabase:
 
    ```bash
    task-planner plans
+   task-planner check
    ```
 
    You can check the local prerequisites at any time with `task-planner status`. It shows
@@ -103,6 +104,7 @@ task-planner config default-project clear
 task-planner auth login
 task-planner auth projects
 task-planner status
+task-planner check
 task-planner add
 task-planner plans
 task-planner delete
@@ -111,8 +113,14 @@ task-planner completion bash|zsh
 
 Task text is the unique plan identifier. `task-planner delete` opens a searchable,
 paginated picker of active plans. After confirmation, it removes the plan from Supabase
-and deletes the Todoist tasks created by that schedule. After a successful deletion,
-choose whether to delete another plan or close; choosing another reloads the active plans.
+and deletes the Todoist tasks created by that schedule. When a schedule ended before today,
+the confirmation also offers **database only**: it removes the schedule and stored task IDs
+from Supabase while leaving Todoist tasks unchanged. Task planner can no longer delete
+those tasks afterward. Use it when the tasks have already been handled in Todoist.
+`task-planner check` lists those past schedules still in Supabase
+and points you to the delete command; it does not inspect Todoist completion state. After
+a successful deletion, choose whether to delete another plan or close; choosing another
+reloads the active plans.
 
 Enable Bash completion with:
 

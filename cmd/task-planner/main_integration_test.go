@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -74,5 +76,49 @@ func TestSharedPostgresSchedules(t *testing.T) {
 		if err := removePlan(schedule.ID); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestDatabaseOnlyDeletionLeavesTodoistUntouched(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	t.Setenv("SUPABASE_DB_URL", url)
+	t.Setenv("TODOIST_API_TOKEN", "test-token")
+	start := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+	id := fmt.Sprintf("database-only-%d", time.Now().UnixNano())
+	p := plan{ID: id, Content: "Database-only deletion test " + id, ProjectID: "project-123", StartDate: start, EndDate: start, Recurrence: "daily"}
+	if err := addPlan(p); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = removePlan(p.ID) })
+	if err := recordTodoistTask(p.ID, start, "todoist-task-left-alone"); err != nil {
+		t.Fatal(err)
+	}
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	originalURL := todoistAPIBaseURL
+	todoistAPIBaseURL = server.URL
+	t.Cleanup(func() { todoistAPIBaseURL = originalURL })
+
+	result := deleteDatabaseOnlyPlan(p)().(deleteCompletedMsg)
+	if result.err != nil || !result.databaseOnly || result.deletedTasks != 0 {
+		t.Fatalf("unexpected database-only deletion result: %#v", result)
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("database-only deletion sent %d Todoist request(s)", requests.Load())
+	}
+	remaining, err := plansPage(p.Content, 10, 0)
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("schedule should be gone from Supabase: %#v, %v", remaining, err)
+	}
+	ids, err := todoistTaskIDs(p.ID)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("stored task IDs should be removed with the schedule: %#v, %v", ids, err)
 	}
 }

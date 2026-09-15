@@ -20,6 +20,7 @@ Usage:
   task-planner auth login      Connect Todoist
   task-planner auth projects   List projects
   task-planner status          Check this computer's setup
+  task-planner check           List past schedules still in Supabase
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
   task-planner delete          Search and delete a plan in the guided TUI
@@ -51,6 +52,8 @@ func main() {
 		}
 	case len(args) == 1 && args[0] == "status":
 		err = showStatus()
+	case len(args) == 1 && args[0] == "check":
+		err = checkPastSchedules()
 	case len(args) == 1 && args[0] == "add":
 		err = guidedAdd()
 	case len(args) == 1 && args[0] == "plans":

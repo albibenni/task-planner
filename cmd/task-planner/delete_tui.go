@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,6 +17,7 @@ type deletePlansLoadedMsg struct {
 
 type deleteCompletedMsg struct {
 	deletedTasks int
+	databaseOnly bool
 	err          error
 }
 
@@ -26,6 +28,8 @@ type deleteModel struct {
 	loading, confirming bool
 	selected            *plan
 	done, cancelled     bool
+	pastSchedule        bool
+	databaseOnly        bool
 	deletedTasks        int
 }
 
@@ -55,6 +59,7 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.deletedTasks = msg.deletedTasks
+		m.databaseOnly = msg.databaseOnly
 		m.done = true
 		m.confirming = false
 		m.cursor = 0
@@ -78,17 +83,24 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if m.confirming {
+		choiceCount := len(m.confirmChoices())
 		switch pressed {
-		case "left", "right", "up", "down", "tab":
-			m.cursor = 1 - m.cursor
+		case "left", "up":
+			m.cursor = (m.cursor + choiceCount - 1) % choiceCount
+		case "right", "down", "tab":
+			m.cursor = (m.cursor + 1) % choiceCount
 		case "y":
 			m.cursor = 0
 		case "n":
-			m.cursor = 1
+			m.cursor = choiceCount - 1
 		case "enter":
 			if m.cursor == 0 {
 				m.loading = true
 				return m, deleteSelectedPlan(*m.selected)
+			}
+			if m.pastSchedule && m.cursor == 1 {
+				m.loading = true
+				return m, deleteDatabaseOnlyPlan(*m.selected)
 			}
 			m.confirming = false
 			m.cursor = 0
@@ -127,7 +139,8 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			selected := pagePlans[m.cursor]
 			m.selected = &selected
 			m.confirming = true
-			m.cursor = 1
+			m.pastSchedule = scheduleIsPast(selected.EndDate, time.Now())
+			m.cursor = len(m.confirmChoices()) - 1
 		}
 	default:
 		if len(key.Runes) > 0 {
@@ -163,7 +176,11 @@ func (m deleteModel) View() string {
 	}
 	if m.done {
 		var builder strings.Builder
-		builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %q and %d matching Todoist task(s).", m.selected.Content, m.deletedTasks)) + "\n\n")
+		if m.databaseOnly {
+			builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %q from Supabase only. Todoist tasks were left unchanged.", m.selected.Content)) + "\n\n")
+		} else {
+			builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %q and %d matching Todoist task(s).", m.selected.Content, m.deletedTasks)) + "\n\n")
+		}
 		builder.WriteString(promptStyle.Render("Do you want to delete another plan?") + "\n\n")
 		for index, choice := range []string{"Yes, delete another plan", "No, close"} {
 			if index == m.cursor {
@@ -213,10 +230,14 @@ func (m deleteModel) View() string {
 }
 
 func (m deleteModel) confirmView() string {
-	choices := []string{"Yes, delete", "No, keep it"}
+	choices := m.confirmChoices()
 	var builder strings.Builder
 	builder.WriteString(titleStyle.Render("Delete shared plan?") + "\n\n")
-	fmt.Fprintf(&builder, "This will delete %q from Supabase and its matching active Todoist task(s).\n\n", m.selected.Content)
+	if m.pastSchedule {
+		fmt.Fprintf(&builder, "%q ended on %s. Choose what to delete.\nDatabase only removes the schedule and stored task IDs; Todoist tasks stay as they are and task-planner can no longer delete them.\n\n", m.selected.Content, m.selected.EndDate.Format("02 Jan 2006"))
+	} else {
+		fmt.Fprintf(&builder, "This will delete %q from Supabase and its matching active Todoist task(s).\n\n", m.selected.Content)
+	}
 	for index, choice := range choices {
 		if index == m.cursor {
 			builder.WriteString(selectedStyle.Render("› " + choice))
@@ -227,6 +248,17 @@ func (m deleteModel) confirmView() string {
 	}
 	builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc cancel") + "\n")
 	return builder.String()
+}
+
+func (m deleteModel) confirmChoices() []string {
+	if m.pastSchedule {
+		return []string{"Delete schedule and Todoist tasks", "Delete schedule from database only", "No, keep it"}
+	}
+	return []string{"Yes, delete", "No, keep it"}
+}
+
+func scheduleIsPast(endDate, today time.Time) bool {
+	return !endDate.IsZero() && endDate.Format(time.DateOnly) < today.Format(time.DateOnly)
 }
 
 func (m deleteModel) filteredPlans() []plan {
@@ -273,6 +305,12 @@ func deleteSelectedPlan(p plan) tea.Cmd {
 	return func() tea.Msg {
 		deletedTasks, err := deletePlanAndTodoistTasks(p)
 		return deleteCompletedMsg{deletedTasks: deletedTasks, err: err}
+	}
+}
+
+func deleteDatabaseOnlyPlan(p plan) tea.Cmd {
+	return func() tea.Msg {
+		return deleteCompletedMsg{databaseOnly: true, err: removePlan(p.ID)}
 	}
 }
 
