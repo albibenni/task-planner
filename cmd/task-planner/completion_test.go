@@ -23,6 +23,9 @@ func TestCompletionScripts(t *testing.T) {
 		if !strings.Contains(script, "help") || !strings.Contains(script, "login logout projects") {
 			t.Errorf("%s completion lacks command help topics", shell)
 		}
+		if !strings.Contains(script, "delete") || !strings.Contains(script, "old") {
+			t.Errorf("%s completion lacks delete old", shell)
+		}
 	}
 }
 

@@ -33,6 +33,7 @@ func completionScript(shell string) (string, error) {
         case "${COMP_WORDS[2]}" in
           config) COMPREPLY=( $(compgen -W 'default-project' -- "$cur") ) ;;
           auth) COMPREPLY=( $(compgen -W 'login logout projects' -- "$cur") ) ;;
+          delete) COMPREPLY=( $(compgen -W 'old' -- "$cur") ) ;;
           completion) COMPREPLY=( $(compgen -W 'bash zsh' -- "$cur") ) ;;
         esac
       elif (( COMP_CWORD == 4 )) && [[ "${COMP_WORDS[2]}" == 'config' && "${COMP_WORDS[3]}" == 'default-project' ]]; then
@@ -47,6 +48,7 @@ func completionScript(shell string) (string, error) {
       fi
       ;;
     auth) COMPREPLY=( $(compgen -W 'login logout projects' -- "$cur") ) ;;
+    delete) COMPREPLY=( $(compgen -W 'old' -- "$cur") ) ;;
     completion) COMPREPLY=( $(compgen -W 'bash zsh' -- "$cur") ) ;;
   esac
 }
@@ -65,6 +67,7 @@ complete -F _task_planner task-planner
       case "$words[3]" in
         config) _values 'config command' default-project ;;
         auth) _values 'auth command' login logout projects ;;
+        delete) _values 'delete command' old ;;
         completion) _values 'shell' bash zsh ;;
       esac
     elif (( CURRENT == 5 )) && [[ "$words[3]" == 'config' && "$words[4]" == 'default-project' ]]; then
@@ -82,6 +85,7 @@ complete -F _task_planner task-planner
   fi
   case "$words[2]" in
     auth) _values 'auth command' login logout projects ;;
+    delete) _values 'delete command' old ;;
     completion) _values 'shell' bash zsh ;;
   esac
 }

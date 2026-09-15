@@ -110,6 +110,47 @@ func plansCount(query string) (int, error) {
 	return int(count), err
 }
 
+func pastPlansPage(today string, limit, offset int) ([]plan, error) {
+	var result []plan
+	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
+		rows, err := conn.Query(ctx, "select id,content,project_id,start_date,end_date,recurrence,weekdays,priority from task_planner_schedules where end_date < $1::date order by end_date,content,id limit $2 offset $3", today, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p plan
+			if err := rows.Scan(&p.ID, &p.Content, &p.ProjectID, &p.StartDate, &p.EndDate, &p.Recurrence, &p.Weekdays, &p.Priority); err != nil {
+				return err
+			}
+			result = append(result, p)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+func pastPlansCount(today string) (int, error) {
+	var count int64
+	err := withDB(func(ctx context.Context, conn *pgx.Conn) error {
+		return conn.QueryRow(ctx, "select count(*) from task_planner_schedules where end_date < $1::date", today).Scan(&count)
+	})
+	return int(count), err
+}
+
+func removePastPlan(id, today string) error {
+	return withDB(func(ctx context.Context, conn *pgx.Conn) error {
+		tag, err := conn.Exec(ctx, "delete from task_planner_schedules where id=$1 and end_date < $2::date", id, today)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return errors.New("schedule was not found or is no longer past")
+		}
+		return nil
+	})
+}
+
 func removePlan(id string) error {
 	return withDB(func(ctx context.Context, conn *pgx.Conn) error {
 		tag, err := conn.Exec(ctx, "delete from task_planner_schedules where id=$1", id)

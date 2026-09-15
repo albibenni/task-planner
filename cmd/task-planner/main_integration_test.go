@@ -130,3 +130,71 @@ func TestDatabaseOnlyDeletionLeavesTodoistUntouched(t *testing.T) {
 		t.Fatalf("stored task IDs should be removed with the schedule: %#v, %v", ids, err)
 	}
 }
+
+func TestDeleteOldFiltersByEndDateAndNeverTouchesTodoist(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	t.Setenv("SUPABASE_DB_URL", url)
+	t.Setenv("TODOIST_API_TOKEN", "test-token")
+	today := time.Now().Format(time.DateOnly)
+	before, err := pastPlansCount(today)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprintf("delete-old-%d", time.Now().UnixNano())
+	oldDate := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+	futureDate := time.Now().AddDate(1, 0, 0)
+	old := plan{ID: id + "-past", Content: id + " past", ProjectID: "project-123", StartDate: oldDate, EndDate: oldDate, Recurrence: "daily"}
+	future := plan{ID: id + "-future", Content: id + " future", ProjectID: "project-123", StartDate: futureDate, EndDate: futureDate, Recurrence: "daily"}
+	for _, schedule := range []plan{old, future} {
+		if err := addPlan(schedule); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = removePlan(schedule.ID) })
+	}
+	if err := recordTodoistTask(old.ID, oldDate, id+"-todoist-task"); err != nil {
+		t.Fatal(err)
+	}
+	count, err := pastPlansCount(today)
+	if err != nil || count != before+1 {
+		t.Fatalf("only the ended schedule should be counted: %d, %v", count, err)
+	}
+	page, err := pastPlansPage(today, 100_000, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundOld, foundFuture bool
+	for _, schedule := range page {
+		foundOld = foundOld || schedule.ID == old.ID
+		foundFuture = foundFuture || schedule.ID == future.ID
+	}
+	if !foundOld || foundFuture {
+		t.Fatalf("delete old should list only ended schedules: old=%t future=%t", foundOld, foundFuture)
+	}
+	if err := removePastPlan(future.ID, today); err == nil {
+		t.Fatal("the database must reject deletion of a schedule whose end date has not passed")
+	}
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	originalURL := todoistAPIBaseURL
+	todoistAPIBaseURL = server.URL
+	t.Cleanup(func() { todoistAPIBaseURL = originalURL })
+	result := deleteOldSelectedPlan(old)().(oldDeleteCompletedMsg)
+	if result.err != nil || requests.Load() != 0 {
+		t.Fatalf("past schedule deletion should use Supabase only: %v, requests=%d", result.err, requests.Load())
+	}
+	ids, err := todoistTaskIDs(old.ID)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("stored task IDs should be removed by the database cascade: %#v, %v", ids, err)
+	}
+	count, err = pastPlansCount(today)
+	if err != nil || count != before {
+		t.Fatalf("the old schedule should be gone: %d, %v", count, err)
+	}
+}

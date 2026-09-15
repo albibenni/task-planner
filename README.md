@@ -121,6 +121,7 @@ task-planner check
 task-planner add
 task-planner plans
 task-planner delete
+task-planner delete old
 task-planner completion bash|zsh
 task-planner help [command [subcommand ...]]
 ```
@@ -133,9 +134,12 @@ the confirmation also offers **database only**: it removes the schedule and stor
 from Supabase while leaving Todoist tasks unchanged. Task planner can no longer delete
 those tasks afterward. Use it when the tasks have already been handled in Todoist.
 `task-planner check` lists those past schedules still in Supabase
-and points you to the delete command; it does not inspect Todoist completion state. After
-a successful deletion, choose whether to delete another plan or close; choosing another
-returns to an empty search.
+and points you to `task-planner delete old`; it does not inspect Todoist completion state.
+`task-planner delete old` opens those past schedules directly in a paginated list and
+deletes the selected schedule from Supabase only after confirmation. It never deletes
+Todoist tasks. After a successful deletion, choose whether to review another past
+schedule or close. The regular `task-planner delete` command also offers another
+search after a successful deletion.
 
 Enable Bash completion with:
 

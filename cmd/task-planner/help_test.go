@@ -14,6 +14,7 @@ func TestHelpDescribesCommandGroupsAndLeafCommands(t *testing.T) {
 		{[]string{"auth"}, []string{"login", "logout", "projects"}},
 		{[]string{"config", "default-project"}, []string{"set", "clear", "Todoist project ID"}},
 		{[]string{"delete"}, []string{"two characters", "Supabase", "database only"}},
+		{[]string{"delete", "old"}, []string{"past", "Supabase only", "Todoist tasks stay unchanged"}},
 		{[]string{"completion", "bash"}, []string{"task-planner completion bash", "Bash"}},
 	} {
 		var output bytes.Buffer
@@ -42,7 +43,7 @@ func TestHelpCoversEveryCommandPath(t *testing.T) {
 	paths := [][]string{
 		{"config"}, {"config", "default-project"}, {"config", "default-project", "set"}, {"config", "default-project", "clear"},
 		{"auth"}, {"auth", "login"}, {"auth", "logout"}, {"auth", "projects"},
-		{"status"}, {"check"}, {"add"}, {"plans"}, {"delete"},
+		{"status"}, {"check"}, {"add"}, {"plans"}, {"delete"}, {"delete", "old"},
 		{"completion"}, {"completion", "bash"}, {"completion", "zsh"}, {"help"},
 	}
 	for _, path := range paths {

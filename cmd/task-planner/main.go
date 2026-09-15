@@ -25,6 +25,7 @@ Usage:
   task-planner add             Add a plan in the guided TUI
   task-planner plans           List active plans
   task-planner delete          Search and delete a plan in the guided TUI
+  task-planner delete old      Review past schedules and remove them from Supabase only
   task-planner completion bash|zsh
   task-planner help [command [subcommand ...]]
 
@@ -84,6 +85,8 @@ func main() {
 		}
 	case len(args) == 1 && args[0] == "delete":
 		err = guidedDelete()
+	case len(args) == 2 && args[0] == "delete" && args[1] == "old":
+		err = guidedDeleteOld()
 	case len(args) == 2 && args[0] == "completion":
 		err = completion(args[1])
 	default:
