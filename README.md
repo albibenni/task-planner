@@ -76,6 +76,14 @@ task-planner help
    answers remain in place. Press `Esc` to cancel.
    Similar task wording is shown before the final confirmation; choose whether it is a
    duplicate, then confirm the exact range and task count.
+   To preselect a destination project for future schedules, run
+   `task-planner config default-project set "Project name"` (or use its Todoist ID).
+   The command checks your current Todoist projects and saves the selected ID locally.
+   You can also edit `~/.config/task-planner/default-project-id` by hand: put one Todoist
+   project ID on the first line. Find IDs with `task-planner auth projects`. Run
+   `task-planner config default-project clear` to remove the saved default. If the
+   project has been removed from Todoist, the picker warns you and starts with the
+   first available project.
 5. Review active schedules:
 
    ```bash
@@ -90,6 +98,8 @@ task-planner help
 
 ```text
 task-planner config
+task-planner config default-project set <name-or-id>
+task-planner config default-project clear
 task-planner auth login
 task-planner auth projects
 task-planner status

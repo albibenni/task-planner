@@ -13,6 +13,10 @@ func usage(writer io.Writer) {
 
 Usage:
   task-planner config          Configure Supabase interactively
+  task-planner config default-project set <name-or-id>
+                               Set the default Todoist destination project
+  task-planner config default-project clear
+                               Clear the default destination project
   task-planner auth login      Connect Todoist
   task-planner auth projects   List projects
   task-planner status          Check this computer's setup
@@ -31,6 +35,10 @@ func main() {
 		usage(os.Stdout)
 	case len(args) == 1 && args[0] == "config":
 		err = config()
+	case len(args) == 4 && args[0] == "config" && args[1] == "default-project" && args[2] == "set":
+		err = setDefaultProject(args[3])
+	case len(args) == 3 && args[0] == "config" && args[1] == "default-project" && args[2] == "clear":
+		err = clearDefaultProject()
 	case len(args) == 2 && args[0] == "auth" && args[1] == "login":
 		err = login()
 	case len(args) == 2 && args[0] == "auth" && args[1] == "logout":

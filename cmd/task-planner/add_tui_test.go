@@ -227,6 +227,45 @@ func TestAddFlowShowsPreviousShortcutAndWaitsDuringCreation(t *testing.T) {
 	}
 }
 
+func TestAddFlowPreselectsConfiguredDestinationProject(t *testing.T) {
+	model := updateAddModel(t, newAddModel(), projectsLoadedMsg{
+		projects:         []project{{ID: "inbox", Name: "Inbox"}, {ID: "coding", Name: "Coding"}},
+		defaultProjectID: "coding",
+	})
+	if model.step != 1 {
+		t.Fatalf("projects should load before schedule details: %#v", model)
+	}
+	model.step = 5
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.step != 6 || model.cursor != 1 {
+		t.Fatalf("the configured destination should be selected in the picker: %#v", model)
+	}
+}
+
+func TestAddFlowKeepsChosenProjectWhenDetailsReload(t *testing.T) {
+	model := addModel{projects: []project{{ID: "inbox"}, {ID: "coding"}}, projectIndex: 1}
+	model = updateAddModel(t, model, projectsLoadedMsg{
+		projects:         []project{{ID: "coding"}, {ID: "inbox"}},
+		defaultProjectID: "inbox",
+	})
+	model.step = 5
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.cursor != 0 || model.projects[model.cursor].ID != "coding" {
+		t.Fatalf("reloading details should keep the project chosen earlier: %#v", model)
+	}
+}
+
+func TestAddFlowWarnsWhenConfiguredProjectIsUnavailable(t *testing.T) {
+	model := updateAddModel(t, newAddModel(), projectsLoadedMsg{
+		projects:         []project{{ID: "inbox", Name: "Inbox"}},
+		defaultProjectID: "deleted",
+	})
+	model.step = 6
+	if !strings.Contains(model.View(), "default destination project") {
+		t.Fatalf("the picker should identify a stale configured project: %s", model.View())
+	}
+}
+
 func TestAddConfirmationViewsRender(t *testing.T) {
 	duplicateView := (addModel{step: 7, content: "Plan my day", duplicateCandidates: []plan{{Content: "Plan the day"}}}).View()
 	if !strings.Contains(duplicateView, "Possible") && !strings.Contains(duplicateView, "similar") {

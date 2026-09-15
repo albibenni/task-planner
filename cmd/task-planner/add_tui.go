@@ -27,6 +27,7 @@ type addModel struct {
 	createdTasks                  int
 	creationError                 error
 	errorMessage                  string
+	projectWarning                string
 }
 
 type similarPlansLoadedMsg struct {
@@ -35,8 +36,9 @@ type similarPlansLoadedMsg struct {
 }
 
 type projectsLoadedMsg struct {
-	projects []project
-	err      error
+	projects         []project
+	defaultProjectID string
+	err              error
 }
 
 type scheduleCreatedMsg struct {
@@ -66,6 +68,28 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.errorMessage = msg.err.Error()
 			return m, nil
+		}
+		selectedID := ""
+		if m.projectIndex < len(m.projects) {
+			selectedID = m.projects[m.projectIndex].ID
+		}
+		m.projectIndex = 0
+		m.projectWarning = ""
+		found := false
+		for _, id := range []string{selectedID, msg.defaultProjectID} {
+			if id == "" || found {
+				continue
+			}
+			for index, project := range msg.projects {
+				if project.ID == id {
+					m.projectIndex = index
+					found = true
+					break
+				}
+			}
+		}
+		if !found && msg.defaultProjectID != "" {
+			m.projectWarning = fmt.Sprintf("default destination project %q is unavailable; choose a project", msg.defaultProjectID)
 		}
 		m.projects, m.step, m.cursor = msg.projects, 1, 0
 		return m, nil
@@ -137,7 +161,7 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case 5:
 			m.priority = int16(m.cursor + 1)
 			m.step++
-			m.cursor = 0
+			m.cursor = m.projectIndex
 		case 6:
 			m.projectIndex = m.cursor
 			m.step, m.cursor = 8, 1
@@ -415,6 +439,9 @@ func (m addModel) View() string {
 			}
 			builder.WriteString("\n")
 		}
+		if m.step == 6 && m.projectWarning != "" {
+			builder.WriteString("\n" + warningStyle.Render("! "+m.projectWarning) + "\n")
+		}
 		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter continue · Shift+Tab/Backspace previous · Esc cancel") + "\n")
 	}
 	if m.errorMessage != "" {
@@ -489,7 +516,11 @@ func loadSimilarPlans(content string) tea.Cmd {
 func loadAddProjects() tea.Cmd {
 	return func() tea.Msg {
 		projects, err := todoistProjects()
-		return projectsLoadedMsg{projects: projects, err: err}
+		if err != nil {
+			return projectsLoadedMsg{err: err}
+		}
+		defaultProjectID, err := readDefaultProjectID()
+		return projectsLoadedMsg{projects: projects, defaultProjectID: defaultProjectID, err: err}
 	}
 }
 
