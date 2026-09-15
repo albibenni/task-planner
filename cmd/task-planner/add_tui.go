@@ -77,7 +77,7 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	key, ok := message.(tea.KeyMsg)
-	if !ok || m.loading {
+	if !ok || m.loading || m.creating {
 		return m, nil
 	}
 	if m.completed {
@@ -90,6 +90,9 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	if pressed == "ctrl+c" || pressed == "esc" {
 		m.cancelled = true
 		return m, tea.Quit
+	}
+	if pressed == "shift+tab" || (pressed == "backspace" && m.step > 2) {
+		return m.goBack(), nil
 	}
 	if m.step <= 2 {
 		return m.updateTextStep(key)
@@ -143,6 +146,50 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m addModel) goBack() addModel {
+	switch m.step {
+	case 0:
+		return m
+	case 5:
+		if m.recurrence == "weekdays" {
+			m.step = 4
+		} else {
+			m.step = 3
+		}
+	case 7:
+		m.step = 0
+	case 8:
+		m.step = 6
+	default:
+		m.step--
+	}
+	m.errorMessage = ""
+	m.cursor = 0
+	m.textCursor = 0
+	switch m.step {
+	case 0:
+		m.textCursor = len([]rune(m.content))
+	case 1:
+		m.textCursor = len([]rune(m.startInput))
+	case 2:
+		m.textCursor = len([]rune(m.endInput))
+	case 3:
+		for i, recurrence := range []string{"daily", "alternate", "weekdays"} {
+			if m.recurrence == recurrence {
+				m.cursor = i
+				break
+			}
+		}
+	case 5:
+		if m.priority > 0 {
+			m.cursor = int(m.priority - 1)
+		}
+	case 6:
+		m.cursor = m.projectIndex
+	}
+	return m
+}
+
 func (m addModel) updateCompletedSchedule(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "left", "right", "up", "down", "tab":
@@ -190,6 +237,9 @@ func (m addModel) updateTextStep(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end", "ctrl+e":
 		m.textCursor = len([]rune(*value))
 	case "backspace":
+		if m.textCursor == 0 && m.step > 0 {
+			return m.goBack(), nil
+		}
 		runes := []rune(*value)
 		if m.textCursor > 0 {
 			*value = string(joinRunes(runes[:m.textCursor-1], runes[m.textCursor:]))
@@ -344,7 +394,11 @@ func (m addModel) View() string {
 			}
 			builder.WriteString(mutedStyle.Render(dateHelp) + "\n")
 		}
-		builder.WriteString(mutedStyle.Render("←/→ move · Home/End jump · Backspace/Delete edit · Enter continue · Esc cancel") + "\n")
+		help := "←/→ move · Home/End jump · Backspace/Delete edit · Enter continue"
+		if m.step > 0 {
+			help += " · Shift+Tab or Backspace at start: previous"
+		}
+		builder.WriteString(mutedStyle.Render(help+" · Esc cancel") + "\n")
 	} else {
 		labels := map[int]string{3: "Repeat", 4: "Choose weekdays (Space toggles)", 5: "Priority", 6: "Destination project"}
 		builder.WriteString(promptStyle.Render(labels[m.step]) + "\n\n")
@@ -361,7 +415,7 @@ func (m addModel) View() string {
 			}
 			builder.WriteString("\n")
 		}
-		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter continue · Esc cancel") + "\n")
+		builder.WriteString("\n" + mutedStyle.Render("↑/↓ select · Enter continue · Shift+Tab/Backspace previous · Esc cancel") + "\n")
 	}
 	if m.errorMessage != "" {
 		builder.WriteString("\n" + warningStyle.Render("! "+m.errorMessage) + "\n")
@@ -378,7 +432,11 @@ func (m addModel) confirmationChoices(builder *strings.Builder, yes, no string) 
 		}
 		builder.WriteString("\n")
 	}
-	builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc cancel") + "\n")
+	help := "↑/↓ or ←/→ select · Enter confirm"
+	if !m.completed {
+		help += " · Shift+Tab/Backspace previous"
+	}
+	builder.WriteString("\n" + mutedStyle.Render(help+" · Esc cancel") + "\n")
 	return builder.String()
 }
 

@@ -151,6 +151,82 @@ func TestAddTextFieldsSupportCursorEditing(t *testing.T) {
 	}
 }
 
+func TestAddFlowCanReturnToPreviousTextInput(t *testing.T) {
+	model := addModel{step: 2, startInput: "20/8/26", endInput: "22/8/26", weekdays: map[int16]bool{}}
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if model.step != 1 || model.startInput != "20/8/26" || model.endInput != "22/8/26" || model.textCursor != len([]rune(model.startInput)) {
+		t.Fatalf("going back should reopen the previous populated input: %#v", model)
+	}
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyBackspace})
+	if model.startInput != "20/8/2" {
+		t.Fatalf("previous input should be editable: %#v", model)
+	}
+}
+
+func TestBackspaceReturnsFromChoiceAndBeginningOfInput(t *testing.T) {
+	choice := addModel{step: 8, projectIndex: 1, projects: []project{{ID: "inbox"}, {ID: "coding"}}}
+	choice = updateAddModel(t, choice, tea.KeyMsg{Type: tea.KeyBackspace})
+	if choice.step != 6 || choice.cursor != 1 {
+		t.Fatalf("Backspace should return from confirmation to the selected project: %#v", choice)
+	}
+	input := addModel{step: 2, startInput: "20/8/26", endInput: "22/8/26", textCursor: 0}
+	input = updateAddModel(t, input, tea.KeyMsg{Type: tea.KeyBackspace})
+	if input.step != 1 || input.endInput != "22/8/26" || input.textCursor != len([]rune(input.startInput)) {
+		t.Fatalf("Backspace at the beginning should return without deleting the input: %#v", input)
+	}
+	first := updateAddModel(t, addModel{content: "Plan", textCursor: 0}, tea.KeyMsg{Type: tea.KeyBackspace})
+	if first.step != 0 || first.content != "Plan" {
+		t.Fatalf("Backspace on the first screen should leave the task text intact: %#v", first)
+	}
+}
+
+func TestAddFlowCanReviewEarlierChoices(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		model      addModel
+		wantStep   int
+		wantCursor int
+	}{
+		{"repeat from end date", addModel{step: 3, endInput: "22/8/26"}, 2, len("22/8/26")},
+		{"weekdays from repeat", addModel{step: 4, recurrence: "weekdays"}, 3, 2},
+		{"priority from weekdays", addModel{step: 5, recurrence: "weekdays", weekdays: map[int16]bool{int16(time.Monday): true}}, 4, 0},
+		{"priority from daily", addModel{step: 5, recurrence: "daily"}, 3, 0},
+		{"project from priority", addModel{step: 6, priority: 3}, 5, 2},
+		{"confirmation from project", addModel{step: 8, projectIndex: 2, projects: []project{{ID: "a"}, {ID: "b"}, {ID: "c"}}}, 6, 2},
+		{"duplicate check from task text", addModel{step: 7, content: "Plan", duplicateCandidates: []plan{{Content: "Planning"}}}, 0, len("Plan")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			model := test.model
+			model.errorMessage = "old validation error"
+			model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyShiftTab})
+			if model.step != test.wantStep || model.errorMessage != "" {
+				t.Fatalf("previous screen should open without a stale error: %#v", model)
+			}
+			cursor := model.cursor
+			if model.step <= 2 {
+				cursor = model.textCursor
+			}
+			if cursor != test.wantCursor {
+				t.Fatalf("previous answer should be selected for editing: %#v", model)
+			}
+		})
+	}
+}
+
+func TestAddFlowShowsPreviousShortcutAndWaitsDuringCreation(t *testing.T) {
+	model := addModel{step: 8, creating: true}
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if model.step != 8 || !model.creating {
+		t.Fatalf("creation in progress must stay on its progress screen: %#v", model)
+	}
+	for _, step := range []int{1, 4, 7, 8} {
+		view := (addModel{step: step, projects: []project{{ID: "inbox"}}, startDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), endDate: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), recurrence: "daily"}).View()
+		if !strings.Contains(view, "Shift+Tab") || !strings.Contains(view, "Backspace") || !strings.Contains(view, "previous") {
+			t.Fatalf("step %d does not show how to return: %s", step, view)
+		}
+	}
+}
+
 func TestAddConfirmationViewsRender(t *testing.T) {
 	duplicateView := (addModel{step: 7, content: "Plan my day", duplicateCandidates: []plan{{Content: "Plan the day"}}}).View()
 	if !strings.Contains(duplicateView, "Possible") && !strings.Contains(duplicateView, "similar") {

@@ -70,6 +70,10 @@ task-planner help
    range. For the end date, use `1w`, `2w`, and so on for a number of weeks after the
    start date, or `1m`, `2m`, and so on for calendar months after it. Choose every day,
    every other day, or a Monday-first set of weekdays.
+   Press `Shift+Tab` on any later screen to return to the previous input or choice and
+   edit it. `Backspace` also goes back on choice and confirmation screens, or at the start
+   of a text input; elsewhere in a text input it deletes a character. Your earlier
+   answers remain in place. Press `Esc` to cancel.
    Similar task wording is shown before the final confirmation; choose whether it is a
    duplicate, then confirm the exact range and task count.
 5. Review active schedules:
