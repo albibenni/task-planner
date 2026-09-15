@@ -20,6 +20,9 @@ func TestCompletionScripts(t *testing.T) {
 		if !strings.Contains(script, "default-project") || !strings.Contains(script, "set clear") {
 			t.Errorf("%s completion lacks default project commands", shell)
 		}
+		if !strings.Contains(script, "help") || !strings.Contains(script, "login logout projects") {
+			t.Errorf("%s completion lacks command help topics", shell)
+		}
 	}
 }
 

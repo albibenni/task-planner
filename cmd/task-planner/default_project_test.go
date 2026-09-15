@@ -7,7 +7,46 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestDefaultProjectPickerSelectsAndCancels(t *testing.T) {
+	projects := []project{{ID: "inbox", Name: "Inbox"}, {ID: "coding", Name: "Coding"}, {ID: "work", Name: "Work"}}
+	model := newDefaultProjectPickerModel(projects, "coding")
+	if model.cursor != 1 {
+		t.Fatalf("saved default should be selected initially: %d", model.cursor)
+	}
+	if view := model.View(); !strings.Contains(view, "Coding") || !strings.Contains(view, "Enter") {
+		t.Fatalf("picker should show projects and controls: %s", view)
+	}
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model = updated.(defaultProjectPickerModel)
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(defaultProjectPickerModel)
+	if !model.confirmed || model.projects[model.cursor].ID != "work" || cmd == nil {
+		t.Fatalf("enter should confirm the highlighted project: %#v", model)
+	}
+
+	model = newDefaultProjectPickerModel(projects, "coding")
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model = updated.(defaultProjectPickerModel)
+	if model.confirmed || cmd == nil {
+		t.Fatalf("escape should cancel the picker: %#v", model)
+	}
+}
+
+func TestDefaultProjectPickerKeepsLongListsNavigable(t *testing.T) {
+	projects := make([]project, 20)
+	for index := range projects {
+		projects[index] = project{ID: string(rune('a' + index)), Name: "Project " + string(rune('a'+index))}
+	}
+	model := newDefaultProjectPickerModel(projects, projects[18].ID)
+	view := model.View()
+	if !strings.Contains(view, "Project s") || !strings.Contains(view, "19 of 20") {
+		t.Fatalf("saved project should be visible in a long list: %s", view)
+	}
+}
 
 type projectResponseTransport func(*http.Request) (*http.Response, error)
 

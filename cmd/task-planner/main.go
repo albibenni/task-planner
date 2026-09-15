@@ -13,11 +13,12 @@ func usage(writer io.Writer) {
 
 Usage:
   task-planner config          Configure Supabase interactively
-  task-planner config default-project set <name-or-id>
-                               Set the default Todoist destination project
+  task-planner config default-project set [name-or-id]
+                               Choose the default Todoist destination project
   task-planner config default-project clear
                                Clear the default destination project
   task-planner auth login      Connect Todoist
+  task-planner auth logout     Remove the local Todoist login
   task-planner auth projects   List projects
   task-planner status          Check this computer's setup
   task-planner check           List past schedules still in Supabase
@@ -25,17 +26,34 @@ Usage:
   task-planner plans           List active plans
   task-planner delete          Search and delete a plan in the guided TUI
   task-planner completion bash|zsh
+  task-planner help [command [subcommand ...]]
+
+Run task-planner help <command> or append --help for more detail.
 `)
+}
+
+func isHelpFlag(value string) bool {
+	return value == "--help" || value == "-h"
 }
 
 func main() {
 	args := os.Args[1:]
 	var err error
 	switch {
-	case len(args) == 0 || args[0] == "help" || args[0] == "--help":
+	case len(args) == 0:
 		usage(os.Stdout)
+	case args[0] == "help":
+		path := args[1:]
+		if len(path) > 0 && isHelpFlag(path[len(path)-1]) {
+			path = path[:len(path)-1]
+		}
+		err = commandHelp(os.Stdout, path)
+	case isHelpFlag(args[len(args)-1]):
+		err = commandHelp(os.Stdout, args[:len(args)-1])
 	case len(args) == 1 && args[0] == "config":
 		err = config()
+	case len(args) == 3 && args[0] == "config" && args[1] == "default-project" && args[2] == "set":
+		err = selectDefaultProject()
 	case len(args) == 4 && args[0] == "config" && args[1] == "default-project" && args[2] == "set":
 		err = setDefaultProject(args[3])
 	case len(args) == 3 && args[0] == "config" && args[1] == "default-project" && args[2] == "clear":

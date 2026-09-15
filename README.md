@@ -77,8 +77,10 @@ task-planner help
    Similar task wording is shown before the final confirmation; choose whether it is a
    duplicate, then confirm the exact range and task count.
    To preselect a destination project for future schedules, run
-   `task-planner config default-project set "Project name"` (or use its Todoist ID).
-   The command checks your current Todoist projects and saves the selected ID locally.
+   `task-planner config default-project set`. Choose from your current Todoist projects
+   with the arrow keys and press Enter. The saved default is highlighted when available.
+   The command saves the selected ID locally. You can still pass a unique project name
+   or Todoist ID directly, for example in a script.
    You can also edit `~/.config/task-planner/default-project-id` by hand: put one Todoist
    project ID on the first line. Find IDs with `task-planner auth projects`. Run
    `task-planner config default-project clear` to remove the saved default. If the
@@ -97,11 +99,22 @@ task-planner help
 
 ## Commands
 
+Run `task-planner help` for the command list and `task-planner help <command>` for its
+behavior and subcommands. Add further subcommands for a specific action, or append
+`--help` or `-h` to a command path. For example:
+
+```bash
+task-planner help auth
+task-planner help config default-project set
+task-planner delete --help
+```
+
 ```text
 task-planner config
-task-planner config default-project set <name-or-id>
+task-planner config default-project set [name-or-id]
 task-planner config default-project clear
 task-planner auth login
+task-planner auth logout
 task-planner auth projects
 task-planner status
 task-planner check
@@ -109,6 +122,7 @@ task-planner add
 task-planner plans
 task-planner delete
 task-planner completion bash|zsh
+task-planner help [command [subcommand ...]]
 ```
 
 Task text is the unique plan identifier. `task-planner delete` opens a paginated picker.

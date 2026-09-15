@@ -66,6 +66,10 @@ func setDefaultProject(value string) error {
 	if err != nil {
 		return err
 	}
+	return saveDefaultProject(selected)
+}
+
+func saveDefaultProject(selected project) error {
 	path, err := defaultProjectPath()
 	if err != nil {
 		return err
