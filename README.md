@@ -111,7 +111,8 @@ task-planner completion bash|zsh
 
 Task text is the unique plan identifier. `task-planner delete` opens a searchable,
 paginated picker of active plans. After confirmation, it removes the plan from Supabase
-and deletes the Todoist tasks created by that schedule.
+and deletes the Todoist tasks created by that schedule. After a successful deletion,
+choose whether to delete another plan or close; choosing another reloads the active plans.
 
 Enable Bash completion with:
 

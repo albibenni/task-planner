@@ -56,6 +56,8 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.deletedTasks = msg.deletedTasks
 		m.done = true
+		m.confirming = false
+		m.cursor = 0
 		return m, nil
 	}
 
@@ -65,7 +67,7 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	pressed := key.String()
 	if m.done {
-		return m, tea.Quit
+		return m.updateCompletedDelete(key)
 	}
 	if pressed == "ctrl+c" || pressed == "esc" {
 		if m.confirming {
@@ -136,12 +138,43 @@ func (m deleteModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m deleteModel) updateCompletedDelete(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "left", "right", "up", "down", "tab":
+		m.cursor = 1 - m.cursor
+	case "y":
+		m.cursor = 0
+	case "n":
+		m.cursor = 1
+	case "ctrl+c", "esc":
+		return m, tea.Quit
+	case "enter":
+		if m.cursor == 0 {
+			return deleteModel{loading: true}, loadAllDeletePlans()
+		}
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
 func (m deleteModel) View() string {
 	if m.cancelled {
 		return mutedStyle.Render("Cancelled.") + "\n"
 	}
 	if m.done {
-		return successStyle.Render(fmt.Sprintf("✓ Deleted %q and %d matching Todoist task(s).", m.selected.Content, m.deletedTasks)) + "\n\n" + mutedStyle.Render("Press any key to close.") + "\n"
+		var builder strings.Builder
+		builder.WriteString(successStyle.Render(fmt.Sprintf("✓ Deleted %q and %d matching Todoist task(s).", m.selected.Content, m.deletedTasks)) + "\n\n")
+		builder.WriteString(promptStyle.Render("Do you want to delete another plan?") + "\n\n")
+		for index, choice := range []string{"Yes, delete another plan", "No, close"} {
+			if index == m.cursor {
+				builder.WriteString(selectedStyle.Render("› " + choice))
+			} else {
+				builder.WriteString("  " + choice)
+			}
+			builder.WriteString("\n")
+		}
+		builder.WriteString("\n" + mutedStyle.Render("↑/↓ or ←/→ select · Enter confirm · Esc close") + "\n")
+		return builder.String()
 	}
 	if m.confirming {
 		return m.confirmView()
