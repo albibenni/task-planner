@@ -164,7 +164,7 @@ func (m addModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = m.projectIndex
 		case 6:
 			m.projectIndex = m.cursor
-			m.step, m.cursor = 8, 1
+			m.step, m.cursor = 8, 0
 		}
 	}
 	return m, nil

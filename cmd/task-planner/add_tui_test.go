@@ -51,6 +51,29 @@ func TestAddModelCollectsDateRangeAndRecurrence(t *testing.T) {
 	}
 }
 
+func TestFinalConfirmationDefaultsToCreatingTasks(t *testing.T) {
+	model := addModel{
+		step:       6,
+		projects:   []project{{ID: "inbox", Name: "Inbox"}},
+		weekdays:   map[int16]bool{},
+		startDate:  time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC),
+		endDate:    time.Date(2026, time.August, 20, 0, 0, 0, 0, time.UTC),
+		recurrence: "daily",
+		priority:   1,
+	}
+
+	model = updateAddModel(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.step != 8 || model.cursor != 0 {
+		t.Fatalf("final confirmation should preselect task creation: %#v", model)
+	}
+
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(addModel)
+	if !model.creating || command == nil {
+		t.Fatalf("pressing Enter on the default choice should start task creation: %#v", model)
+	}
+}
+
 func TestAddModelShowsCreationFailureInsideTUI(t *testing.T) {
 	model := addModel{creationError: errors.New("Todoist unavailable")}
 	if view := model.View(); !strings.Contains(view, "Creation did not finish") {
