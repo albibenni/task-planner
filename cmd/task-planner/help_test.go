@@ -43,7 +43,7 @@ func TestHelpCoversEveryCommandPath(t *testing.T) {
 	paths := [][]string{
 		{"config"}, {"config", "default-project"}, {"config", "default-project", "set"}, {"config", "default-project", "clear"},
 		{"auth"}, {"auth", "login"}, {"auth", "logout"}, {"auth", "projects"},
-		{"status"}, {"check"}, {"add"}, {"plans"}, {"delete"}, {"delete", "old"},
+		{"status"}, {"check"}, {"add"}, {"list"}, {"plans"}, {"delete"}, {"delete", "old"},
 		{"completion"}, {"completion", "bash"}, {"completion", "zsh"}, {"help"},
 	}
 	for _, path := range paths {

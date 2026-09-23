@@ -23,7 +23,8 @@ Usage:
   task-planner status          Check this computer's setup
   task-planner check           List past schedules still in Supabase
   task-planner add             Add a plan in the guided TUI
-  task-planner plans           List active plans
+  task-planner list            List all schedules in Supabase
+  task-planner plans           Alias for list
   task-planner delete          Search and delete a plan in the guided TUI
   task-planner delete old      Preview and remove all past schedules from Supabase only
   task-planner completion bash|zsh
@@ -75,14 +76,8 @@ func main() {
 		err = checkPastSchedules()
 	case len(args) == 1 && args[0] == "add":
 		err = guidedAdd()
-	case len(args) == 1 && args[0] == "plans":
-		var activePlans []plan
-		activePlans, err = plans()
-		if err == nil {
-			for _, activePlan := range activePlans {
-				fmt.Printf("%s — %s to %s\n", activePlan.Content, activePlan.StartDate.Format("2006-01-02"), activePlan.EndDate.Format("2006-01-02"))
-			}
-		}
+	case len(args) == 1 && (args[0] == "list" || args[0] == "plans"):
+		err = listSchedules(os.Stdout, plans)
 	case len(args) == 1 && args[0] == "delete":
 		err = guidedDelete()
 	case len(args) == 2 && args[0] == "delete" && args[1] == "old":

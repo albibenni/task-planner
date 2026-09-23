@@ -89,7 +89,7 @@ task-planner help
 5. Review active schedules and find past schedules still in Supabase:
 
    ```bash
-   task-planner plans
+   task-planner list
    task-planner check
    ```
 
@@ -119,6 +119,7 @@ task-planner auth projects
 task-planner status
 task-planner check
 task-planner add
+task-planner list
 task-planner plans
 task-planner delete
 task-planner delete old

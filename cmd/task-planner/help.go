@@ -75,7 +75,11 @@ var helpTopics = map[string]helpTopic{
 	},
 	"plans": {
 		usage:       "task-planner plans",
-		description: "List schedules saved in Supabase with their date ranges.",
+		description: "Alias for task-planner list.",
+	},
+	"list": {
+		usage:       "task-planner list",
+		description: "List all schedules saved in Supabase with their date ranges.",
 	},
 	"delete": {
 		usage:       "task-planner delete",

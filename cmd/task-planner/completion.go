@@ -22,13 +22,13 @@ func completionScript(shell string) (string, error) {
   cur="${COMP_WORDS[COMP_CWORD]}"
   command="${COMP_WORDS[1]}"
   if (( COMP_CWORD == 1 )); then
-    COMPREPLY=( $(compgen -W 'config auth status check add plans delete completion help' -- "$cur") )
+    COMPREPLY=( $(compgen -W 'config auth status check add list plans delete completion help' -- "$cur") )
     return
   fi
   case "$command" in
     help)
       if (( COMP_CWORD == 2 )); then
-        COMPREPLY=( $(compgen -W 'config auth status check add plans delete completion help' -- "$cur") )
+        COMPREPLY=( $(compgen -W 'config auth status check add list plans delete completion help' -- "$cur") )
       elif (( COMP_CWORD == 3 )); then
         case "${COMP_WORDS[2]}" in
           config) COMPREPLY=( $(compgen -W 'default-project' -- "$cur") ) ;;
@@ -57,12 +57,12 @@ complete -F _task_planner task-planner
 	case "zsh":
 		return `_task_planner() {
   if (( CURRENT == 2 )); then
-    _describe -t commands 'task-planner command' 'config:Manage local settings' 'auth:Manage Todoist login' 'status:Check local setup' 'check:List past schedules' 'add:Add a guided plan' 'plans:List plans' 'delete:Delete a plan' 'completion:Print completion code' 'help:Show help'
+    _describe -t commands 'task-planner command' 'config:Manage local settings' 'auth:Manage Todoist login' 'status:Check local setup' 'check:List past schedules' 'add:Add a guided plan' 'list:List all schedules' 'plans:Alias for list' 'delete:Delete a plan' 'completion:Print completion code' 'help:Show help'
     return
   fi
   if [[ "$words[2]" == 'help' ]]; then
     if (( CURRENT == 3 )); then
-      _values 'command' config auth status check add plans delete completion help
+      _values 'command' config auth status check add list plans delete completion help
     elif (( CURRENT == 4 )); then
       case "$words[3]" in
         config) _values 'config command' default-project ;;
