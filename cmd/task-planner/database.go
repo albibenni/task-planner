@@ -39,7 +39,32 @@ func dbURL() (string, error) {
 }
 
 func setupDB(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, `create table if not exists task_planner_schedules (id text primary key,content text not null,project_id text not null,start_date date not null,end_date date not null check(end_date >= start_date),recurrence text not null check(recurrence in ('daily','alternate','weekdays')),weekdays smallint[] not null default '{}',priority smallint check(priority between 1 and 4),created_at timestamptz not null default now()); alter table task_planner_schedules drop constraint if exists task_planner_schedules_content_key; create table if not exists task_planner_schedule_tasks (schedule_id text not null references task_planner_schedules(id) on delete cascade,due_date date not null,todoist_task_id text not null unique,primary key(schedule_id,due_date));`)
+	_, err := conn.Exec(ctx, `
+		create table if not exists public.task_planner_schedules (
+			id text primary key,
+			content text not null,
+			project_id text not null,
+			start_date date not null,
+			end_date date not null check(end_date >= start_date),
+			recurrence text not null check(recurrence in ('daily','alternate','weekdays')),
+			weekdays smallint[] not null default '{}',
+			priority smallint check(priority between 1 and 4),
+			created_at timestamptz not null default now()
+		);
+		alter table public.task_planner_schedules
+			drop constraint if exists task_planner_schedules_content_key;
+		create table if not exists public.task_planner_schedule_tasks (
+			schedule_id text not null references public.task_planner_schedules(id) on delete cascade,
+			due_date date not null,
+			todoist_task_id text not null unique,
+			primary key(schedule_id,due_date)
+		);
+
+		alter table public.task_planner_schedules enable row level security;
+		alter table public.task_planner_schedule_tasks enable row level security;
+		alter table if exists public.task_planner_plans enable row level security;
+		alter table if exists public.task_planner_runs enable row level security;
+	`)
 	return err
 }
 

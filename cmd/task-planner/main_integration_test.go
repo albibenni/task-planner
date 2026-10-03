@@ -87,6 +87,56 @@ func TestSharedPostgresSchedules(t *testing.T) {
 	}
 }
 
+func TestSetupDBEnablesRLSForPublicTables(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+
+	// These tables were created by releases before task_planner_schedules and can
+	// still exist in an upgraded Supabase project.
+	if _, err := conn.Exec(ctx, `
+		create table if not exists public.task_planner_plans (id text primary key);
+		create table if not exists public.task_planner_runs (id text primary key);
+		alter table public.task_planner_plans disable row level security;
+		alter table public.task_planner_runs disable row level security;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), "drop table if exists public.task_planner_runs, public.task_planner_plans")
+	}()
+
+	if err := setupDB(ctx, conn); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{
+		"task_planner_plans",
+		"task_planner_runs",
+		"task_planner_schedules",
+		"task_planner_schedule_tasks",
+	} {
+		var enabled bool
+		if err := conn.QueryRow(ctx, `
+			select c.relrowsecurity
+			from pg_catalog.pg_class c
+			join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+			where n.nspname = 'public' and c.relname = $1
+		`, table).Scan(&enabled); err != nil {
+			t.Fatalf("inspect RLS for %s: %v", table, err)
+		}
+		if !enabled {
+			t.Errorf("RLS is disabled for public.%s", table)
+		}
+	}
+}
+
 func TestDatabaseOnlyDeletionLeavesTodoistUntouched(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
