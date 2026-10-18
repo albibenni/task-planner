@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -10,13 +11,17 @@ func similarPlans(content string) ([]plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	return duplicateCandidates(content, all, time.Now()), nil
+}
+
+func duplicateCandidates(content string, plans []plan, today time.Time) []plan {
 	var matches []plan
-	for _, candidate := range all {
-		if similarText(content, candidate.Content) {
+	for _, candidate := range plans {
+		if !scheduleIsPast(candidate.EndDate, today) && similarText(content, candidate.Content) {
 			matches = append(matches, candidate)
 		}
 	}
-	return matches, nil
+	return matches
 }
 
 func similarText(first, second string) bool {
